@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Performance Impact Checker",
+  "description": "Monitors code changes for potential performance issues and suggests optimizations when performance-degrading patterns are detected",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend/**/*.py",
+      "frontend/src/**/*.tsx",
+      "frontend/src/**/*.ts",
+      "backend/apps/**/*.py",
+      "backend/watcher/**/*.py",
+      "frontend/src/**/*.js"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the changed files for performance issues. Look for: 1) N+1 database queries in Django models/views, 2) Missing database indexes on frequently queried fields, 3) Inefficient loops or nested queries, 4) Large data fetching without pagination, 5) Synchronous operations that should be async, 6) Memory leaks in React components, 7) Unnecessary re-renders or missing memoization, 8) Large bundle imports, 9) Blocking operations in Celery tasks, 10) Inefficient Playwright selectors. For each issue found, provide specific suggestions for improvement with code examples where helpful."
+  }
+}

@@ -1,0 +1,3 @@
+"""
+Tests for scraping service
+"""

@@ -1,0 +1,41 @@
+.haunt-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  border-left: 3px solid transparent;
+  user-select: none;
+}
+
+.haunt-item:hover {
+  background-color: #f0f0f0;
+}
+
+.haunt-item.selected {
+  background-color: #e3f2fd;
+  border-left-color: #2196f3;
+}
+
+.haunt-item.dragging {
+  opacity: 0.5;
+}
+
+.haunt-icon {
+  font-size: 16px;
+}
+
+.haunt-name {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-indicator {
+  font-size: 14px;
+  opacity: 0.6;
+}

@@ -1,0 +1,29 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Documentation
+README.md
+docs/
+
+# Kiro configuration
+.kiro/
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "name": "Documentation Updater",
+  "description": "Automatically updates README.md and other documentation files whenever code changes are made to ensure documentation stays current with the codebase",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend/**/*.py",
+      "frontend/src/**/*.tsx",
+      "frontend/src/**/*.ts",
+      "backend/requirements.txt",
+      "frontend/package.json",
+      "docker-compose.yml",
+      ".env.example"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Code changes have been detected in the project. Please review the changes and update the README.md and any other relevant documentation files to reflect:\n\n1. New features or functionality that have been added\n2. Changes to the API endpoints or data models\n3. Updates to dependencies or configuration\n4. Changes to the project structure or architecture\n5. New environment variables or setup requirements\n\nFocus on keeping the documentation accurate, clear, and helpful for new developers joining the project. Update sections like installation instructions, API documentation, feature descriptions, and any technical specifications that may have changed."
+  }
+}

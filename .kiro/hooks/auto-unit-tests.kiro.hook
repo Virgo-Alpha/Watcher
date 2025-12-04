@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "name": "Auto Unit Test Generator",
+  "description": "Monitors changes to Python models, views, services, serializers, React components, and TypeScript files to automatically generate or update corresponding unit tests when logic, UI, or structural code is modified. Ensure all tests pass by fixing any failing tests, or updating the functionality as need be",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend/apps/*/models.py",
+      "backend/apps/*/views.py",
+      "backend/apps/*/services.py",
+      "backend/apps/*/serializers.py",
+      "backend/apps/*/tasks.py",
+      "frontend/src/components/**/*.tsx",
+      "frontend/src/pages/**/*.tsx",
+      "frontend/src/services/**/*.ts",
+      "frontend/src/store/**/*.ts",
+      "frontend/src/hooks/**/*.ts"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A file affecting application logic, UI, or structure has been modified. Analyze the changes and generate comprehensive unit tests for the modified functionality. For Python files, create Django test cases using the project's testing patterns. For React/TypeScript files, create Jest/React Testing Library tests. Focus on testing the core functionality, edge cases, and integration points. Place tests in the appropriate test directory following the project structure conventions."
+  }
+}

@@ -1,0 +1,28 @@
+# Product Overview
+
+Watcher is a site change monitoring application that "haunts" websites to detect user-defined changes and provides RSS feeds with a Google Reader-style interface.
+
+## Core Value Proposition
+
+- **Natural Language Setup**: Users describe what they want to monitor in plain English, AI converts this to technical selectors
+- **SPA Compatible**: Uses Playwright headless browser to monitor modern JavaScript-heavy applications
+- **RSS Integration**: Generates RSS feeds for changes, enabling integration with existing feed readers
+- **Reader Interface**: Three-panel Google Reader-inspired UI for efficient change consumption
+- **Public Sharing**: Users can make their monitoring configurations public for community benefit
+
+## Key Features
+
+- AI-powered configuration from natural language descriptions
+- Scheduled monitoring with configurable intervals (15min, 30min, hourly, daily)
+- Change detection with customizable alert modes (once, on-change)
+- Folder organization for grouping related monitors
+- Public/private haunt sharing with subscription system
+- Keyboard shortcuts for power users (J/K navigation, M for read/unread, S for star)
+- Real-time manual refresh capabilities
+
+## Target Users
+
+- Developers monitoring deployment status, API changes, or service health
+- Job seekers tracking application statuses and new postings
+- Students monitoring course enrollment, grades, or academic deadlines
+- General users tracking any website changes (product availability, news updates, etc.)

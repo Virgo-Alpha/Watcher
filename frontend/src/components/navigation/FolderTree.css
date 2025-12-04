@@ -1,0 +1,35 @@
+.folder-tree-container {
+  width: 100%;
+}
+
+.folder-tree-item {
+  width: 100%;
+}
+
+.folder-children {
+  width: 100%;
+}
+
+.unfolderd-section {
+  margin-top: 8px;
+  transition: background-color 0.2s;
+}
+
+.unfolderd-section.drop-target {
+  background-color: #e3f2fd;
+}
+
+.folder-header-simple {
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.drop-target {
+  background-color: #e3f2fd;
+  border: 2px dashed #2196f3;
+  border-radius: 4px;
+}
