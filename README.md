@@ -113,6 +113,34 @@ Say "watch the price in the product details" and AI generates:
 - **Subscription Management**: Subscribe and unsubscribe from public haunts at any time
 - **Pre-configured Haunts**: 6 public haunts available immediately on first startup
 
+## Quick Deploy to AWS ☁️
+
+Deploy Watcher to AWS ECS Fargate with CloudFront CDN in under 30 minutes:
+
+```bash
+cd deployment
+bash fast-deploy.sh
+```
+
+**What you get:**
+- Production-ready infrastructure (VPC, RDS PostgreSQL, Redis, ECS, ALB, CloudFront)
+- 4 ECS Fargate services (backend, frontend, celery worker, celery beat)
+- Demo data pre-populated with 6 public haunts
+- CloudFront CDN for global access
+- **Cost**: ~$110/month
+
+**Demo credentials:**
+- Email: `demo@watcher.local`
+- Password: `demo123`
+
+📖 **Full deployment guide**: [`deployment/START_HERE.md`](deployment/START_HERE.md)
+
+---
+
+## Local Development Setup
+
+For local development with Docker Compose, continue below. For AWS deployment, see above.
+
 ## Configuration
 
 ### Required Environment Variables
@@ -735,8 +763,137 @@ All endpoints that accept URLs include SSRF (Server-Side Request Forgery) protec
 
 ## Architecture
 
-- **Backend**: Django REST Framework with PostgreSQL
-- **Frontend**: React with Redux Toolkit
-- **Background Processing**: Celery with Redis broker
-- **Browser Automation**: Playwright for SPA-compatible scraping
-- **AI Integration**: Google Gemini 2.0 Flash for configuration generation and intelligent alert decisions
+Watcher uses a containerized microservices architecture with Django backend, React frontend, and Celery for background processing.
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        Browser[Web Browser]
+        RSSReader[RSS Reader]
+    end
+
+    subgraph "Frontend Container"
+        React[React App<br/>Redux + TypeScript]
+        ReactRouter[React Router]
+    end
+
+    subgraph "Backend Container"
+        Django[Django REST API]
+        DRF[Django REST Framework]
+        JWT[JWT Authentication]
+        
+        subgraph "Django Apps"
+            AuthApp[Authentication]
+            HauntsApp[Haunts]
+            ScrapingApp[Scraping]
+            RSSApp[RSS]
+            AIApp[AI Service]
+            SubsApp[Subscriptions]
+        end
+    end
+
+    subgraph "Background Workers"
+        Celery[Celery Workers]
+        CeleryBeat[Celery Beat<br/>Scheduler]
+        
+        subgraph "Tasks"
+            ScrapeTasks[Scrape Tasks]
+            AlertTasks[Alert Tasks]
+            CleanupTasks[Cleanup Tasks]
+        end
+    end
+
+    subgraph "Data Layer"
+        PostgreSQL[(PostgreSQL<br/>Database)]
+        Redis[(Redis<br/>Message Broker)]
+    end
+
+    subgraph "External Services"
+        Gemini[Google Gemini API<br/>AI Studio]
+        Playwright[Playwright<br/>Headless Browser]
+        TargetSites[Target Websites]
+    end
+
+    Browser -->|HTTP/HTTPS| React
+    RSSReader -->|RSS Feed| RSSApp
+    
+    React -->|API Calls| Django
+    ReactRouter -->|Routes| React
+    
+    Django --> AuthApp
+    Django --> HauntsApp
+    Django --> ScrapingApp
+    Django --> RSSApp
+    Django --> AIApp
+    Django --> SubsApp
+    
+    Django -->|Read/Write| PostgreSQL
+    Django -->|Queue Tasks| Redis
+    
+    Celery -->|Consume Tasks| Redis
+    CeleryBeat -->|Schedule Tasks| Redis
+    
+    Celery --> ScrapeTasks
+    Celery --> AlertTasks
+    Celery --> CleanupTasks
+    
+    ScrapeTasks -->|Scrape| Playwright
+    Playwright -->|HTTP Requests| TargetSites
+    
+    AIApp -->|API Calls| Gemini
+    ScrapeTasks -->|AI Summary| AIApp
+    HauntsApp -->|Generate Config| AIApp
+    
+    ScrapeTasks -->|Store Results| PostgreSQL
+    AlertTasks -->|Read Changes| PostgreSQL
+    RSSApp -->|Read Items| PostgreSQL
+    
+    style Browser fill:#e1f5ff
+    style RSSReader fill:#e1f5ff
+    style React fill:#61dafb
+    style Django fill:#092e20
+    style Celery fill:#37814a
+    style PostgreSQL fill:#336791
+    style Redis fill:#dc382d
+    style Gemini fill:#4285f4
+    style Playwright fill:#2eac6d
+```
+
+### Component Responsibilities
+
+**Frontend (React)**
+- Three-panel Google Reader-inspired UI
+- Redux state management for haunts, folders, and RSS items
+- Keyboard shortcuts (J/K navigation, M for read/unread, S for star)
+- Real-time updates and manual refresh capabilities
+
+**Backend (Django)**
+- RESTful API with JWT authentication
+- Haunt configuration management
+- User and subscription management
+- RSS feed generation
+- SSRF protection for URL validation
+
+**Background Workers (Celery)**
+- Scheduled scraping based on haunt intervals (15min, 30min, hourly, daily)
+- Change detection and alert generation
+- Email notifications
+- Cleanup of old RSS items
+
+**AI Service (Google Gemini)**
+- Natural language to CSS selector conversion
+- Intent-based alert decisions
+- Context-aware change summaries
+- Configuration validation
+
+**Browser Automation (Playwright)**
+- Headless Chromium for JavaScript-heavy sites
+- SPA-compatible scraping
+- Screenshot capture for debugging
+- Timeout and error handling
+
+**Data Storage**
+- PostgreSQL for persistent data (users, haunts, RSS items, subscriptions)
+- Redis for Celery task queue and caching
+- Folder hierarchy with many-to-one relationships
+- User read state tracking for RSS items

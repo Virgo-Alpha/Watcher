@@ -1,0 +1,10 @@
+cdk/node_modules/
+cdk/cdk.out/
+cdk/outputs.json
+cdk/*.js
+cdk/*.d.ts
+cdk/bin/*.js
+cdk/bin/*.d.ts
+cdk/lib/*.js
+cdk/lib/*.d.ts
+*.log
