@@ -154,7 +154,7 @@ def scrape_haunt(self, haunt_id):
         
         # Initialize services
         scraping_service = ScrapingService(timeout=30000, use_pool=True)
-        change_detection_service = ChangeDetectionService(rate_limit_minutes=60)
+        change_detection_service = ChangeDetectionService()
         
         # Scrape the URL
         try:
@@ -184,46 +184,61 @@ def scrape_haunt(self, haunt_id):
         logger.info('Change detection for haunt %s: has_changes=%s, changes=%s', 
                    haunt_id, has_changes, len(changes))
         
-        # Determine if alert should be sent
+        # Use AI to determine if alert should be sent
         should_alert = False
+        ai_summary = None
+        alert_reason = "No changes detected"
+        
         if has_changes:
-            truthy_values = haunt.config.get('truthy_values', {})
-            should_alert = change_detection_service.should_alert(
-                has_changes=has_changes,
-                changes=changes,
-                alert_mode=haunt.alert_mode,
-                last_alert_state=haunt.last_alert_state,
-                current_state=new_state,
-                truthy_values=truthy_values
+            from apps.ai.services import AIConfigService
+            ai_service = AIConfigService()
+            
+            # AI evaluates if changes match user's intent
+            evaluation = ai_service.evaluate_alert_decision(
+                user_description=haunt.description,
+                old_state=old_state,
+                new_state=new_state,
+                changes=changes
             )
             
-            logger.info('Alert decision for haunt %s: should_alert=%s', haunt_id, should_alert)
+            should_alert = evaluation['should_alert']
+            alert_reason = evaluation['reason']
+            ai_summary = evaluation['summary']
+            
+            logger.info(
+                'AI alert decision for haunt %s: should_alert=%s, confidence=%s, reason=%s',
+                haunt_id, should_alert, evaluation['confidence'], alert_reason
+            )
         
-        # Create RSS item if changes detected
+        # Create RSS item if alert should be sent
         rss_item_created = False
-        if has_changes:
-            from apps.rss.services import RSSService
+        email_sent = False
+        if should_alert:
+            from apps.rss.services import RSSService, EmailNotificationService
+            
             rss_service = RSSService()
+            email_service = EmailNotificationService()
 
             try:
-                # Create RSS item (without AI summary initially)
+                # Create RSS item with AI summary already generated
                 rss_item = rss_service.create_rss_item(
                     haunt=haunt,
                     changes=changes,
-                    ai_summary=None
+                    ai_summary=ai_summary if haunt.enable_ai_summary else None
                 )
                 rss_item_created = True
-                logger.info('Created RSS item %s for haunt %s', rss_item.id, haunt_id)
-
-                # Generate AI summary asynchronously if enabled
-                if haunt.enable_ai_summary:
-                    from apps.ai.tasks import generate_summary_async
-                    generate_summary_async.delay(
-                        str(rss_item.id),
-                        old_state,
-                        new_state
+                logger.info('Created RSS item %s for haunt %s with AI summary', rss_item.id, haunt_id)
+                
+                # Send email notifications
+                try:
+                    email_result = email_service.send_change_notification(rss_item)
+                    email_sent = email_result['sent'] > 0
+                    logger.info(
+                        'Email notifications for haunt %s: %s sent, %s failed',
+                        haunt_id, email_result['sent'], email_result['failed']
                     )
-                    logger.info('Queued AI summary generation for RSS item %s', rss_item.id)
+                except Exception as email_error:
+                    logger.error('Failed to send email notifications for haunt %s: %s', haunt_id, email_error)
 
             except Exception as e:
                 logger.error('Failed to create RSS item for haunt %s: %s', haunt_id, e)
@@ -234,10 +249,8 @@ def scrape_haunt(self, haunt_id):
             haunt.last_scraped_at = timezone.now()
             haunt.reset_error_count()
             
-            # Update alert state if needed
-            if should_alert and change_detection_service.should_update_alert_state(
-                haunt.alert_mode, should_alert
-            ):
+            # Update alert state when alert is sent (for tracking purposes)
+            if should_alert:
                 haunt.last_alert_state = new_state
                 logger.info('Updated alert state for haunt %s', haunt_id)
             
@@ -263,6 +276,7 @@ def scrape_haunt(self, haunt_id):
             'changes_count': len(changes),
             'should_alert': should_alert,
             'rss_item_created': rss_item_created,
+            'email_sent': email_sent,
             'scraped_at': timezone.now().isoformat(),
             'duration_ms': round(duration_ms, 2)
         }

@@ -18,12 +18,24 @@ const PublicHauntDirectory: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [haunts, subs] = await Promise.all([
-        apiClient.getPublicHaunts(),
-        apiClient.getSubscriptions(),
-      ]);
+      // Always fetch public haunts
+      const haunts = await apiClient.getPublicHaunts();
       setPublicHaunts(haunts);
-      setSubscriptions(subs);
+
+      // Only fetch subscriptions if user is authenticated
+      const accessToken = localStorage.getItem('accessToken');
+      if (accessToken) {
+        try {
+          const subs = await apiClient.getSubscriptions();
+          setSubscriptions(subs);
+        } catch (err) {
+          // If subscriptions fail (e.g., token expired), just continue without them
+          console.warn('Failed to fetch subscriptions:', err);
+          setSubscriptions([]);
+        }
+      } else {
+        setSubscriptions([]);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load public haunts');
     } finally {

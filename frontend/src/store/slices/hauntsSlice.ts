@@ -163,7 +163,8 @@ const hauntsSlice = createSlice({
     });
     builder.addCase(fetchHaunts.fulfilled, (state, action) => {
       state.loading = false;
-      state.items = action.payload;
+      // Handle both array and paginated response
+      state.items = Array.isArray(action.payload) ? action.payload : [];
     });
     builder.addCase(fetchHaunts.rejected, (state, action) => {
       state.loading = false;
@@ -223,7 +224,8 @@ const hauntsSlice = createSlice({
 
     // Fetch folders
     builder.addCase(fetchFolders.fulfilled, (state, action) => {
-      state.folders = action.payload;
+      // Handle both array and paginated response
+      state.folders = Array.isArray(action.payload) ? action.payload : [];
     });
 
     // Create folder

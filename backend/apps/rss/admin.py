@@ -14,7 +14,7 @@ class RSSItemAdmin(admin.ModelAdmin):
     )
     list_filter = (
         'pub_date', 'created_at', 'haunt__is_public', 
-        'haunt__owner', 'haunt__alert_mode'
+        'haunt__owner'
     )
     search_fields = (
         'title', 'description', 'ai_summary', 'haunt__name', 

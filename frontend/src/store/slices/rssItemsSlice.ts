@@ -138,7 +138,8 @@ const rssItemsSlice = createSlice({
     // Fetch read states
     builder.addCase(fetchReadStates.fulfilled, (state, action) => {
       const statesMap: Record<string, UserReadState> = {};
-      action.payload.forEach(state => {
+      const payload = Array.isArray(action.payload) ? action.payload : [];
+      payload.forEach(state => {
         statesMap[state.rss_item] = state;
       });
       state.readStates = statesMap;

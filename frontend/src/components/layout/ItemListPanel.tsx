@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import { setSelectedItem } from '../../store/slices/rssItemsSlice';
 import { markAsRead } from '../../store/slices/rssItemsSlice';
+import { refreshHaunt } from '../../store/slices/hauntsSlice';
 import { RSSItem } from '../../types';
 import { parseStatusChange } from '../../utils/formatters';
 import './ItemListPanel.css';
@@ -14,6 +15,7 @@ const ItemListPanel: React.FC = () => {
   
   const listContentRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const handleItemSelect = (item: RSSItem) => {
     dispatch(setSelectedItem(item));
@@ -98,28 +100,36 @@ const ItemListPanel: React.FC = () => {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="item-list-panel-container">
-        <div className="item-list-header">
-          <h3>{selectedHaunt.name}</h3>
-        </div>
-        <div className="item-list-content">
-          <div className="loading-state">
-            <div className="loading-spinner"></div>
-            <p>Loading items...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const handleRefresh = () => {
-    if (selectedHaunt) {
-      // Import refreshHaunt action
-      const { refreshHaunt } = require('../../store/slices/hauntsSlice');
-      dispatch(refreshHaunt(selectedHaunt.id));
+  const handleRefresh = async () => {
+    if (selectedHaunt && !isRefreshing) {
+      setIsRefreshing(true);
+      try {
+        await dispatch(refreshHaunt(selectedHaunt.id)).unwrap();
+        console.log('Refresh initiated successfully');
+      } catch (error: any) {
+        console.error('Refresh failed:', error);
+        if (error?.status === 429) {
+          alert('Please wait a few minutes before refreshing again.');
+        } else {
+          alert('Failed to refresh. Please try again.');
+        }
+      } finally {
+        setTimeout(() => setIsRefreshing(false), 1000);
+      }
     }
+  };
+
+  const formatLastScraped = (dateString: string | null): string => {
+    if (!dateString) return 'Never scraped';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (seconds < 60) return 'Scraped just now';
+    if (seconds < 3600) return `Scraped ${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `Scraped ${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `Scraped ${Math.floor(seconds / 86400)}d ago`;
+    return `Scraped on ${date.toLocaleDateString()}`;
   };
 
   return (
@@ -130,14 +140,20 @@ const ItemListPanel: React.FC = () => {
           <span className="item-count">{items.length} items</span>
         </div>
         <button 
-          className="refresh-button" 
+          className={`refresh-button ${isRefreshing ? 'refreshing' : ''}`}
           onClick={handleRefresh}
-          title="Refresh (R)"
-          aria-label="Refresh haunt"
+          disabled={isRefreshing}
+          title={isRefreshing ? "Refreshing..." : "Refresh (R)"}
+          aria-label={isRefreshing ? "Refreshing haunt" : "Refresh haunt"}
         >
           ↻
         </button>
       </div>
+      {selectedHaunt.last_scraped_at && (
+        <div className="haunt-metadata">
+          <span className="last-scraped">{formatLastScraped(selectedHaunt.last_scraped_at)}</span>
+        </div>
+      )}
 
       <div className="item-list-content" ref={listContentRef}>
         {items.length === 0 ? (

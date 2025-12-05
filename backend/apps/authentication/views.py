@@ -32,10 +32,8 @@ class UserRegistrationView(generics.CreateAPIView):
         
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
 
 
@@ -53,10 +51,8 @@ class UserLoginView(TokenObtainPairView):
         
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
         })
 
 

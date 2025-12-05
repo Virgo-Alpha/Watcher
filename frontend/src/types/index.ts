@@ -36,6 +36,11 @@ export interface Haunt {
   is_public: boolean;
   public_slug: string | null;
   folder: string | null;
+  is_active: boolean;
+  last_scraped_at: string | null;
+  last_error: string;
+  error_count: number;
+  enable_ai_summary: boolean;
   created_at: string;
   updated_at: string;
   unread_count?: number;

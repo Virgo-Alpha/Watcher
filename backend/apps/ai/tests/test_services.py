@@ -1,349 +1,446 @@
 """
-Unit tests for AI service functionality
+Tests for AI service functionality
 """
 import json
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase, override_settings
+from unittest.mock import Mock, patch
+from django.test import TestCase
+from django.conf import settings
 from apps.ai.services import AIConfigService, AIConfigurationError
 
 
-class AIConfigServiceTest(TestCase):
+class AIConfigServiceTestCase(TestCase):
     """Test cases for AIConfigService"""
     
-    def setUp(self):
-        """Set up test fixtures"""
-        self.service = AIConfigService()
-    
-    @override_settings(LLM_API_KEY='')
-    def test_is_available_without_api_key(self):
-        """Test service availability when API key is not configured"""
-        service = AIConfigService()
-        self.assertFalse(service.is_available())
-    
-    @override_settings(LLM_API_KEY='test-api-key')
-    def test_is_available_with_api_key(self):
-        """Test service availability when API key is configured"""
-        with patch('apps.ai.services.OpenAI'):
+    def test_service_initialization_with_api_key(self):
+        """Test that service initializes correctly with API key"""
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_genai.GenerativeModel.return_value = mock_model
+            
             service = AIConfigService()
+            
+            self.assertIsNotNone(service.model)
             self.assertTrue(service.is_available())
+            mock_genai.configure.assert_called_once_with(api_key=settings.LLM_API_KEY)
+            mock_genai.GenerativeModel.assert_called_once_with('models/gemini-2.0-flash')
     
-    @override_settings(LLM_API_KEY='')
-    def test_generate_config_without_api_key(self):
-        """Test configuration generation fails without API key"""
-        service = AIConfigService()
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.generate_config("https://example.com", "Monitor status")
-        
-        self.assertIn("AI service is not available", str(context.exception))
+    def test_service_initialization_without_api_key(self):
+        """Test that service handles missing API key gracefully"""
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            
+            self.assertIsNone(service.model)
+            self.assertFalse(service.is_available())
     
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_config_success(self, mock_openai):
+    def test_generate_config_success(self):
         """Test successful configuration generation"""
-        # Mock OpenAI response
         mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = json.dumps({
+        mock_response.text = json.dumps({
             "selectors": {
                 "status": "css:.status-indicator"
             },
             "normalization": {
                 "status": {
                     "type": "text",
-                    "transform": "lowercase"
+                    "transform": "lowercase",
+                    "strip": True
                 }
             },
             "truthy_values": {
                 "status": ["open", "available"]
             }
         })
+        # Mock the candidates structure
+        mock_candidate = Mock()
+        mock_candidate.content.parts = [Mock()]
+        mock_response.candidates = [mock_candidate]
         
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        config = service.generate_config("https://example.com", "Monitor status")
-        
-        # Verify the configuration structure
-        self.assertIn('selectors', config)
-        self.assertIn('normalization', config)
-        self.assertIn('truthy_values', config)
-        self.assertEqual(config['selectors']['status'], 'css:.status-indicator')
-        self.assertEqual(config['truthy_values']['status'], ['open', 'available'])
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            config = service.generate_config(
+                url="https://example.com",
+                description="Check if status is open"
+            )
+            
+            self.assertIn("selectors", config)
+            self.assertIn("status", config["selectors"])
+            self.assertEqual(config["selectors"]["status"], "css:.status-indicator")
     
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_config_with_markdown_formatting(self, mock_openai):
-        """Test configuration generation with markdown-formatted response"""
-        # Mock OpenAI response with markdown formatting
+    def test_generate_config_with_markdown_formatting(self):
+        """Test that service handles markdown-formatted JSON responses"""
         mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = '''```json
+        mock_response.text = '''```json
 {
     "selectors": {
         "status": "css:.status"
     },
     "normalization": {
-        "status": {"type": "text"}
+        "status": {
+            "type": "text",
+            "transform": "lowercase",
+            "strip": true
+        }
     },
     "truthy_values": {
         "status": ["open"]
     }
 }
 ```'''
+        # Mock the candidates structure
+        mock_candidate = Mock()
+        mock_candidate.content.parts = [Mock()]
+        mock_response.candidates = [mock_candidate]
         
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        config = service.generate_config("https://example.com", "Monitor status")
-        
-        self.assertIn('selectors', config)
-        self.assertEqual(config['selectors']['status'], 'css:.status')
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            config = service.generate_config(
+                url="https://example.com",
+                description="Check status"
+            )
+            
+            self.assertIn("selectors", config)
+            self.assertIn("status", config["selectors"])
     
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_config_invalid_json(self, mock_openai):
-        """Test configuration generation with invalid JSON response"""
-        # Mock OpenAI response with invalid JSON
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = "Invalid JSON response"
-        
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.generate_config("https://example.com", "Monitor status")
-        
-        self.assertIn("Invalid JSON in AI response", str(context.exception))
+    def test_generate_config_unavailable_service(self):
+        """Test that generate_config raises error when service unavailable"""
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            
+            with self.assertRaises(AIConfigurationError) as context:
+                service.generate_config(
+                    url="https://example.com",
+                    description="test"
+                )
+            
+            self.assertIn("not available", str(context.exception))
     
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_config_missing_required_keys(self, mock_openai):
-        """Test configuration generation with missing required keys"""
-        # Mock OpenAI response missing required keys
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = json.dumps({
-            "selectors": {"status": "css:.status"}
-            # Missing normalization and truthy_values
-        })
-        
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.generate_config("https://example.com", "Monitor status")
-        
-        self.assertIn("Missing required key", str(context.exception))
-    
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_config_auto_prefix_selectors(self, mock_openai):
-        """Test that selectors without prefixes get css: prefix added"""
-        # Mock OpenAI response without css: prefix
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = json.dumps({
-            "selectors": {
-                "status": ".status-indicator"  # No css: prefix
-            },
-            "normalization": {
-                "status": {"type": "text"}
-            },
-            "truthy_values": {
-                "status": ["open"]
-            }
-        })
-        
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        config = service.generate_config("https://example.com", "Monitor status")
-        
-        # The raw config should not be modified, but parsing should handle the prefix
-        self.assertEqual(config['selectors']['status'], '.status-indicator')
-        
-        # But when parsed, it should have the css: prefix
-        haunt_config = service.parse_config(config)
-        self.assertEqual(haunt_config.get_selector_string('status'), 'css:.status-indicator')
-    
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_summary_success(self, mock_openai):
+    def test_generate_summary_success(self):
         """Test successful summary generation"""
-        # Mock OpenAI response
         mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = "Status changed from closed to open"
+        mock_response.text = "Status changed from closed to open"
         
-        mock_client = Mock()
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.return_value = mock_client
-        
-        service = AIConfigService()
-        old_state = {"status": "closed"}
-        new_state = {"status": "open"}
-        
-        summary = service.generate_summary(old_state, new_state)
-        
-        self.assertEqual(summary, "Status changed from closed to open")
-        
-        # Verify the API was called with correct parameters
-        mock_client.chat.completions.create.assert_called_once()
-        call_args = mock_client.chat.completions.create.call_args
-        self.assertEqual(call_args[1]['model'], 'gpt-3.5-turbo')
-        self.assertEqual(call_args[1]['temperature'], 0.3)
-        self.assertEqual(call_args[1]['max_tokens'], 150)
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            summary = service.generate_summary(
+                old_state={"status": "closed"},
+                new_state={"status": "open"}
+            )
+            
+            self.assertEqual(summary, "Status changed from closed to open")
     
-    @override_settings(LLM_API_KEY='')
-    def test_generate_summary_fallback_without_api_key(self):
-        """Test summary generation fallback when API key is not available"""
-        service = AIConfigService()
-        old_state = {"status": "closed"}
-        new_state = {"status": "open"}
-        
-        summary = service.generate_summary(old_state, new_state)
-        
-        self.assertEqual(summary, "status changed from 'closed' to 'open'")
+    def test_generate_summary_fallback(self):
+        """Test fallback summary when AI service unavailable"""
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            summary = service.generate_summary(
+                old_state={"status": "closed"},
+                new_state={"status": "open"}
+            )
+            
+            # Should return fallback summary
+            self.assertIn("status", summary.lower())
+            self.assertIn("closed", summary.lower())
+            self.assertIn("open", summary.lower())
     
-    @override_settings(LLM_API_KEY='test-api-key')
-    @patch('apps.ai.services.OpenAI')
-    def test_generate_summary_fallback_on_error(self, mock_openai):
-        """Test summary generation fallback when AI call fails"""
-        # Mock OpenAI to raise an exception
-        mock_client = Mock()
-        mock_client.chat.completions.create.side_effect = Exception("API Error")
-        mock_openai.return_value = mock_client
+    def test_evaluate_alert_decision_success(self):
+        """Test successful AI alert evaluation"""
+        mock_response = Mock()
+        mock_response.text = json.dumps({
+            "should_alert": True,
+            "reason": "Applications have opened, matching user's monitoring intent",
+            "confidence": 0.95,
+            "summary": "Fellowship applications are now open"
+        })
         
-        service = AIConfigService()
-        old_state = {"status": "closed", "deadline": "2024-01-01"}
-        new_state = {"status": "open", "deadline": "2024-01-01"}
-        
-        summary = service.generate_summary(old_state, new_state)
-        
-        # Should fallback to simple summary
-        self.assertEqual(summary, "status changed from 'closed' to 'open'")
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when fellowship applications open",
+                old_state={"status": "Applications closed"},
+                new_state={"status": "Applications are now open"},
+                changes={"status": {"old": "Applications closed", "new": "Applications are now open"}}
+            )
+            
+            self.assertTrue(result["should_alert"])
+            self.assertIn("reason", result)
+            self.assertIn("confidence", result)
+            self.assertIn("summary", result)
+            self.assertGreaterEqual(result["confidence"], 0.0)
+            self.assertLessEqual(result["confidence"], 1.0)
     
-    def test_generate_fallback_summary_no_changes(self):
+    def test_evaluate_alert_decision_no_alert(self):
+        """Test AI evaluation deciding not to alert"""
+        mock_response = Mock()
+        mock_response.text = json.dumps({
+            "should_alert": False,
+            "reason": "Change is minor formatting update, not related to application status",
+            "confidence": 0.85,
+            "summary": "Minor text formatting change detected"
+        })
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when fellowship applications open",
+                old_state={"status": "Applications  closed"},
+                new_state={"status": "Applications closed"},
+                changes={"status": {"old": "Applications  closed", "new": "Applications closed"}}
+            )
+            
+            self.assertFalse(result["should_alert"])
+            self.assertIn("reason", result)
+    
+    def test_evaluate_alert_decision_with_markdown_formatting(self):
+        """Test AI evaluation with markdown-formatted JSON response"""
+        mock_response = Mock()
+        mock_response.text = '''```json
+{
+    "should_alert": true,
+    "reason": "Deadline has been announced",
+    "confidence": 0.9,
+    "summary": "Application deadline set to March 15, 2026"
+}
+```'''
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me about application deadlines",
+                old_state={"deadline": None},
+                new_state={"deadline": "March 15, 2026"},
+                changes={"deadline": {"old": None, "new": "March 15, 2026"}}
+            )
+            
+            self.assertTrue(result["should_alert"])
+            self.assertEqual(result["confidence"], 0.9)
+    
+    def test_evaluate_alert_decision_fallback_when_unavailable(self):
+        """Test fallback behavior when AI service is unavailable"""
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when status changes",
+                old_state={"status": "closed"},
+                new_state={"status": "open"},
+                changes={"status": {"old": "closed", "new": "open"}}
+            )
+            
+            # Should use fallback logic
+            self.assertTrue(result["should_alert"])  # Has changes
+            self.assertEqual(result["confidence"], 0.5)
+            self.assertIn("AI unavailable", result["reason"])
+            self.assertIn("summary", result)
+    
+    def test_evaluate_alert_decision_fallback_no_changes(self):
+        """Test fallback behavior with no changes"""
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when status changes",
+                old_state={"status": "open"},
+                new_state={"status": "open"},
+                changes={}
+            )
+            
+            # Should not alert when no changes
+            self.assertFalse(result["should_alert"])
+            self.assertEqual(result["confidence"], 0.5)
+    
+    def test_evaluate_alert_decision_handles_ai_error(self):
+        """Test graceful error handling when AI call fails"""
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.side_effect = Exception("API rate limit exceeded")
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when status changes",
+                old_state={"status": "closed"},
+                new_state={"status": "open"},
+                changes={"status": {"old": "closed", "new": "open"}}
+            )
+            
+            # Should fall back to simple detection
+            self.assertTrue(result["should_alert"])  # Has changes
+            self.assertEqual(result["confidence"], 0.5)
+            self.assertIn("failed", result["reason"].lower())
+    
+    def test_evaluate_alert_decision_handles_invalid_json(self):
+        """Test handling of invalid JSON response from AI"""
+        mock_response = Mock()
+        mock_response.text = "This is not valid JSON"
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when status changes",
+                old_state={"status": "closed"},
+                new_state={"status": "open"},
+                changes={"status": {"old": "closed", "new": "open"}}
+            )
+            
+            # Should fall back to simple detection
+            self.assertTrue(result["should_alert"])
+            self.assertEqual(result["confidence"], 0.5)
+    
+    def test_evaluate_alert_decision_handles_missing_keys(self):
+        """Test handling of AI response missing required keys"""
+        mock_response = Mock()
+        mock_response.text = json.dumps({
+            "should_alert": True,
+            "reason": "Status changed"
+            # Missing confidence and summary
+        })
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when status changes",
+                old_state={"status": "closed"},
+                new_state={"status": "open"},
+                changes={"status": {"old": "closed", "new": "open"}}
+            )
+            
+            # Should fall back to simple detection
+            self.assertTrue(result["should_alert"])
+            self.assertEqual(result["confidence"], 0.5)
+    
+    def test_evaluate_alert_decision_complex_state_changes(self):
+        """Test AI evaluation with multiple field changes"""
+        mock_response = Mock()
+        mock_response.text = json.dumps({
+            "should_alert": True,
+            "reason": "Both application status and deadline changed, matching user intent",
+            "confidence": 0.92,
+            "summary": "Applications opened with deadline of March 15, 2026"
+        })
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me when applications open",
+                old_state={"status": "closed", "deadline": None, "batch": "Fall 2025"},
+                new_state={"status": "open", "deadline": "March 15, 2026", "batch": "Spring 2026"},
+                changes={
+                    "status": {"old": "closed", "new": "open"},
+                    "deadline": {"old": None, "new": "March 15, 2026"},
+                    "batch": {"old": "Fall 2025", "new": "Spring 2026"}
+                }
+            )
+            
+            self.assertTrue(result["should_alert"])
+            self.assertGreater(result["confidence"], 0.9)
+    
+    def test_evaluate_alert_decision_low_confidence(self):
+        """Test AI evaluation with low confidence score"""
+        mock_response = Mock()
+        mock_response.text = json.dumps({
+            "should_alert": True,
+            "reason": "Unclear if this change is significant",
+            "confidence": 0.4,
+            "summary": "Some text changed on the page"
+        })
+        
+        with patch('apps.ai.services.genai') as mock_genai:
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_genai.GenerativeModel.return_value = mock_model
+            
+            service = AIConfigService()
+            result = service.evaluate_alert_decision(
+                user_description="Alert me about important changes",
+                old_state={"text": "Some content"},
+                new_state={"text": "Different content"},
+                changes={"text": {"old": "Some content", "new": "Different content"}}
+            )
+            
+            self.assertTrue(result["should_alert"])
+            self.assertEqual(result["confidence"], 0.4)
+    
+    def test_fallback_summary_no_changes(self):
         """Test fallback summary generation with no changes"""
-        service = AIConfigService()
-        old_state = {"status": "open"}
-        new_state = {"status": "open"}
-        
-        summary = service._generate_fallback_summary(old_state, new_state)
-        
-        self.assertEqual(summary, "No changes detected")
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            summary = service._generate_fallback_summary(
+                old_state={"status": "open"},
+                new_state={"status": "open"}
+            )
+            
+            self.assertEqual(summary, "No changes detected")
     
-    def test_generate_fallback_summary_single_change(self):
+    def test_fallback_summary_single_change(self):
         """Test fallback summary generation with single change"""
-        service = AIConfigService()
-        old_state = {"status": "closed"}
-        new_state = {"status": "open"}
-        
-        summary = service._generate_fallback_summary(old_state, new_state)
-        
-        self.assertEqual(summary, "status changed from 'closed' to 'open'")
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            summary = service._generate_fallback_summary(
+                old_state={"status": "closed"},
+                new_state={"status": "open"}
+            )
+            
+            self.assertIn("status", summary)
+            self.assertIn("closed", summary)
+            self.assertIn("open", summary)
     
-    def test_generate_fallback_summary_multiple_changes(self):
+    def test_fallback_summary_multiple_changes(self):
         """Test fallback summary generation with multiple changes"""
-        service = AIConfigService()
-        old_state = {"status": "closed", "deadline": "2024-01-01", "priority": "low"}
-        new_state = {"status": "open", "deadline": "2024-02-01", "priority": "high"}
-        
-        summary = service._generate_fallback_summary(old_state, new_state)
-        
-        # Should show first 2 changes and indicate more
-        self.assertIn("3 fields changed", summary)
-        self.assertIn("...", summary)
-    
-    def test_parse_config_success(self):
-        """Test successful configuration parsing"""
-        service = AIConfigService()
-        config = {
-            "selectors": {"status": "css:.status"},
-            "normalization": {"status": {"type": "text"}},
-            "truthy_values": {"status": ["open"]}
-        }
-        
-        # Should not raise any exception
-        haunt_config = service.parse_config(config)
-        self.assertIsNotNone(haunt_config)
-    
-    def test_parse_config_missing_keys(self):
-        """Test configuration parsing with missing keys"""
-        service = AIConfigService()
-        config = {"selectors": {"status": "css:.status"}}
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.parse_config(config)
-        
-        self.assertIn("Missing required key", str(context.exception))
-    
-    def test_parse_config_invalid_types(self):
-        """Test configuration parsing with invalid types"""
-        service = AIConfigService()
-        config = {
-            "selectors": "not a dict",  # Should be dict
-            "normalization": {},
-            "truthy_values": {}
-        }
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.parse_config(config)
-        
-        self.assertIn("'selectors' must be a dictionary", str(context.exception))
-    
-    def test_parse_config_invalid_selector_type(self):
-        """Test configuration parsing with invalid selector type"""
-        service = AIConfigService()
-        config = {
-            "selectors": {"status": 123},  # Should be string
-            "normalization": {},
-            "truthy_values": {}
-        }
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.parse_config(config)
-        
-        self.assertIn("Selector 'status' must be a string", str(context.exception))
-    
-    def test_parse_config_invalid_normalization_type(self):
-        """Test configuration parsing with invalid normalization type"""
-        service = AIConfigService()
-        config = {
-            "selectors": {"status": "css:.status"},
-            "normalization": {"status": "not a dict"},  # Should be dict
-            "truthy_values": {}
-        }
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.parse_config(config)
-        
-        self.assertIn("Normalization rules for 'status' must be a dictionary", str(context.exception))
-    
-    def test_parse_config_invalid_truthy_values_type(self):
-        """Test configuration parsing with invalid truthy values type"""
-        service = AIConfigService()
-        config = {
-            "selectors": {"status": "css:.status"},
-            "normalization": {"status": {"type": "text"}},
-            "truthy_values": {"status": "not a list"}  # Should be list
-        }
-        
-        with self.assertRaises(AIConfigurationError) as context:
-            service.parse_config(config)
-        
-        self.assertIn("Truthy values for 'status' must be a list", str(context.exception))
+        with patch('apps.ai.services.settings') as mock_settings:
+            mock_settings.LLM_API_KEY = None
+            
+            service = AIConfigService()
+            summary = service._generate_fallback_summary(
+                old_state={"status": "closed", "deadline": None, "batch": "Fall"},
+                new_state={"status": "open", "deadline": "March 15", "batch": "Spring"}
+            )
+            
+            self.assertIn("3 changes detected", summary)

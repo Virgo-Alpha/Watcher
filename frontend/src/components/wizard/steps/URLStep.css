@@ -3,21 +3,21 @@
 }
 
 .url-step h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-feed-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .step-description {
-  margin: 0 0 24px 0;
-  font-size: 14px;
-  color: #6b7280;
+  margin: 0 0 16px 0;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 
 .url-input {
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-family: var(--font-family-code);
 }
 
 .url-input.invalid {
@@ -26,21 +26,20 @@
 
 .url-input.invalid:focus {
   border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
 .url-examples {
-  margin-top: 32px;
-  padding: 16px;
-  background-color: #f9fafb;
-  border-radius: 6px;
+  margin-top: 24px;
+  padding: var(--spacing-lg);
+  background-color: var(--color-sidebar-bg);
+  border: var(--border-width) solid var(--color-border);
 }
 
 .url-examples h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-item-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .url-examples ul {
@@ -49,9 +48,9 @@
 }
 
 .url-examples li {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 6px;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
 }
 
 .url-examples li:last-child {

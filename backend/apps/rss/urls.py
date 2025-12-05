@@ -1,5 +1,5 @@
 """
-RSS app URL configuration.
+RSS feed URL configuration for XML feeds.
 """
 from django.urls import path
 from apps.rss import views

@@ -3,14 +3,14 @@
 }
 
 .description-step h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-feed-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .name-input {
-  font-weight: 500;
+  font-weight: bold;
 }
 
 .description-input {
@@ -19,22 +19,21 @@
 }
 
 .description-examples {
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .description-examples h4 {
-  margin: 0 0 16px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-item-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .example-card {
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
+  background-color: var(--color-sidebar-bg);
+  border: var(--border-width) solid var(--color-border);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
 .example-card:last-child {
@@ -43,15 +42,15 @@
 
 .example-card strong {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
+  font-size: var(--font-size-nav);
+  font-weight: bold;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
 }
 
 .example-card p {
   margin: 0;
-  font-size: 13px;
-  color: #6b7280;
+  font-size: var(--font-size-nav);
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }

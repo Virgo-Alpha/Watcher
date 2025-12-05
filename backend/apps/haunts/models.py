@@ -185,12 +185,6 @@ class Haunt(models.Model):
         (1440, '24 hours'),  # 24 * 60 = 1440 minutes
     ]
     
-    # Alert mode choices
-    ALERT_MODES = [
-        ('once', 'Alert once when condition is met'),
-        ('on_change', 'Alert on every change'),
-    ]
-    
     # Primary key and ownership
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='haunts')
@@ -229,12 +223,6 @@ class Haunt(models.Model):
     )
     
     # Monitoring configuration
-    alert_mode = models.CharField(
-        max_length=20,
-        choices=ALERT_MODES,
-        default='on_change',
-        help_text="When to send alerts"
-    )
     scrape_interval = models.IntegerField(
         choices=SCRAPE_INTERVALS,
         default=60,
@@ -243,7 +231,7 @@ class Haunt(models.Model):
     )
     enable_ai_summary = models.BooleanField(
         default=True,
-        help_text="Enable AI-generated summaries for changes"
+        help_text="Enable AI-generated summaries and alert decisions"
     )
     
     # Public sharing
@@ -309,12 +297,6 @@ class Haunt(models.Model):
                 'scrape_interval': 'Invalid scrape interval. Must be 15, 30, 60, or 1440 minutes.'
             })
         
-        # Validate alert mode
-        if self.alert_mode not in [choice[0] for choice in self.ALERT_MODES]:
-            raise ValidationError({
-                'alert_mode': 'Invalid alert mode. Must be "once" or "on_change".'
-            })
-        
         # Validate folder ownership
         if self.folder and self.folder.user != self.owner:
             raise ValidationError({
@@ -323,7 +305,7 @@ class Haunt(models.Model):
         
         # Validate config structure if provided
         if self.config and self.config != {}:
-            required_keys = ['selectors', 'normalization', 'truthy_values']
+            required_keys = ['selectors', 'normalization']
             for key in required_keys:
                 if key not in self.config:
                     raise ValidationError({
@@ -363,11 +345,6 @@ class Haunt(models.Model):
     def scrape_interval_display(self):
         """Get human-readable scrape interval"""
         return dict(self.SCRAPE_INTERVALS).get(self.scrape_interval, 'Unknown')
-    
-    @property
-    def alert_mode_display(self):
-        """Get human-readable alert mode"""
-        return dict(self.ALERT_MODES).get(self.alert_mode, 'Unknown')
     
     def reset_error_count(self):
         """Reset error count after successful scrape"""

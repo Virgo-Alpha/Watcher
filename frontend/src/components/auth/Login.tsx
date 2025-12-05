@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import { login, clearError } from '../../store/slices/authSlice';
-import './Login.css';
+import './Auth.css';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -29,12 +29,12 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
+    <div className="auth-container">
+      <div className="auth-card">
         <h1>Watcher</h1>
-        <p className="login-subtitle">Site Change Monitoring</p>
+        <p className="auth-subtitle">Sign in to continue</p>
         
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="error-message">{error}</div>}
           
           <div className="form-group">
@@ -62,9 +62,13 @@ const Login: React.FC = () => {
             />
           </div>
 
-          <button type="submit" disabled={loading} className="login-button">
-            {loading ? 'Logging in...' : 'Log In'}
+          <button type="submit" disabled={loading} className="auth-button">
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
+
+          <p className="auth-link">
+            Don't have an account? <Link to="/signup">Sign up</Link>
+          </p>
         </form>
       </div>
     </div>

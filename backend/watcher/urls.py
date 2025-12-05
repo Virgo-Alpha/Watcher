@@ -15,7 +15,7 @@ urlpatterns = [
     path('api/v1/', include('apps.authentication.urls')),
     path('api/v1/', include('apps.haunts.urls')),
     path('api/v1/', include('apps.subscriptions.urls')),
-    path('api/v1/', include('apps.rss.urls')),
+    path('api/v1/', include('apps.rss.api_urls')),
     path('api/v1/', include('apps.scraping.urls')),
     path('api/v1/', include('apps.ai.urls')),
     path('rss/', include('apps.rss.urls')),

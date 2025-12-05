@@ -11,35 +11,33 @@
 }
 
 .directory-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #111827;
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-size-feed-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .directory-description {
   margin: 0;
-  font-size: 14px;
-  color: #6b7280;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-secondary);
 }
 
 .directory-search {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .search-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: border-color 0.2s;
+  padding: var(--spacing-lg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--border-radius-minimal);
+  font-size: var(--font-size-item-title);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-text-primary);
 }
 
 .directory-content {
@@ -53,48 +51,46 @@
 }
 
 .haunt-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  background: var(--color-white);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--border-radius-minimal);
+  padding: 16px;
 }
 
 .haunt-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  background-color: var(--color-hover-bg);
 }
 
 .haunt-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
-  gap: 12px;
+  margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-lg);
 }
 
 .haunt-card-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
+  font-size: var(--font-size-feed-title);
+  font-weight: bold;
+  color: var(--color-text-primary);
   flex: 1;
 }
 
 .unread-badge {
-  background-color: #3b82f6;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 8px;
+  background-color: var(--color-text-secondary);
+  color: var(--color-white);
+  font-size: var(--font-size-metadata);
+  font-weight: bold;
+  padding: var(--spacing-xs) var(--spacing-md);
   border-radius: 12px;
   flex-shrink: 0;
 }
 
 .haunt-card-description {
-  margin: 0 0 16px 0;
-  font-size: 14px;
-  color: #6b7280;
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -104,10 +100,10 @@
 
 .haunt-card-meta {
   display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  font-size: 12px;
-  color: #9ca3af;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-size-metadata);
+  color: var(--color-text-secondary);
 }
 
 .haunt-url {
@@ -122,34 +118,33 @@
 
 .haunt-card-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-md);
 }
 
 .action-button {
   flex: 1;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: var(--border-radius-minimal);
+  font-size: var(--font-size-button);
+  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s;
   border: none;
   text-decoration: none;
   text-align: center;
 }
 
 .action-button.subscribe {
-  background-color: #3b82f6;
-  color: white;
+  background-color: var(--color-highlight);
+  color: var(--color-white);
 }
 
 .action-button.subscribe:hover {
-  background-color: #2563eb;
+  background-color: #C23321;
 }
 
 .action-button.subscribed {
   background-color: #10b981;
-  color: white;
+  color: var(--color-white);
 }
 
 .action-button.subscribed:hover {
@@ -157,13 +152,13 @@
 }
 
 .action-button.secondary {
-  background-color: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background-color: var(--color-white);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--color-border);
 }
 
 .action-button.secondary:hover {
-  background-color: #f9fafb;
+  background-color: var(--color-hover-bg);
 }
 
 .loading-state,
@@ -180,8 +175,8 @@
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3b82f6;
+  border: 4px solid var(--color-border);
+  border-top: 4px solid var(--color-text-secondary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -196,24 +191,24 @@
 .error-state p,
 .empty-state p {
   margin: 0;
-  font-size: 14px;
-  color: #6b7280;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-secondary);
 }
 
 .error-state button {
   margin-top: 16px;
-  padding: 8px 16px;
-  background-color: #3b82f6;
-  color: white;
+  padding: 7px 14px;
+  background-color: var(--color-highlight);
+  color: var(--color-white);
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: var(--border-radius-minimal);
+  font-size: var(--font-size-button);
+  font-weight: bold;
   cursor: pointer;
 }
 
 .error-state button:hover {
-  background-color: #2563eb;
+  background-color: #C23321;
 }
 
 /* Responsive design */

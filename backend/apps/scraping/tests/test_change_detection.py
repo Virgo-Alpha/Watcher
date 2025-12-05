@@ -11,7 +11,7 @@ class ChangeDetectionTest(TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.service = ChangeDetectionService(rate_limit_minutes=60)
+        self.service = ChangeDetectionService()
 
     def test_detect_changes_first_scrape(self):
         """Test detecting changes on first scrape (no old state)"""

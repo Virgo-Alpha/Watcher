@@ -1,40 +1,41 @@
 .folder-item {
   cursor: pointer;
-  transition: background-color 0.2s;
   user-select: none;
 }
 
 .folder-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--color-hover-bg);
+}
+
+.folder-item:hover .folder-name {
+  text-decoration: underline;
 }
 
 .folder-item.drop-target {
-  background-color: #e3f2fd;
-  border: 2px dashed #2196f3;
-  border-radius: 4px;
+  background-color: var(--color-hover-bg);
+  border: 1px dashed var(--color-border);
 }
 
 .folder-item-content {
   display: flex;
   align-items: center;
-  padding: 8px 0;
-  gap: 6px;
+  padding: var(--spacing-md) 0;
+  gap: var(--spacing-sm);
 }
 
 .folder-icon {
   font-size: 10px;
-  color: #666;
+  color: var(--color-text-secondary);
   width: 12px;
   display: inline-block;
-  transition: transform 0.2s;
 }
 
-.folder-icon.expanded {
-  transform: rotate(0deg);
+.folder-icon.expanded::before {
+  content: '▼';
 }
 
-.folder-icon.collapsed {
-  transform: rotate(-90deg);
+.folder-icon.collapsed::before {
+  content: '▶';
 }
 
 .folder-icon-spacer {
@@ -43,26 +44,21 @@
 }
 
 .folder-icon-folder {
-  font-size: 16px;
+  font-size: var(--icon-size-large);
 }
 
 .folder-name {
   flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  font-size: var(--font-size-nav);
+  font-weight: bold;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .unread-badge {
-  background-color: #2196f3;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-  min-width: 20px;
-  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-metadata);
+  font-weight: normal;
 }

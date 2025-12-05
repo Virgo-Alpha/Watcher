@@ -2,52 +2,53 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #f9fafb;
+  background-color: var(--color-white);
 }
 
 .app-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background-color: white;
-  border-bottom: 1px solid #e5e7eb;
-  height: 60px;
+  padding: 0 16px;
+  background-color: var(--color-sidebar-bg);
+  border-bottom: 1px solid var(--color-border);
+  height: 48px;
   flex-shrink: 0;
 }
 
 .app-nav-brand h1 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--color-text-primary);
 }
 
 .app-nav-links {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .nav-link {
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: none;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
+  border-radius: 0;
+  font-size: var(--font-size-nav);
+  font-weight: normal;
+  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s;
 }
 
 .nav-link:hover {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--color-hover-bg);
+  color: var(--color-text-primary);
 }
 
 .nav-link.active {
-  background-color: #eff6ff;
-  color: #2563eb;
+  background-color: var(--color-white);
+  color: var(--color-unread-blue);
+  font-weight: bold;
 }
 
 .app-content {

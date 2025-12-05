@@ -1,27 +1,26 @@
 .context-menu {
   position: fixed;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background-color: var(--color-white);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--border-radius-minimal);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   min-width: 180px;
-  padding: 4px 0;
+  padding: var(--spacing-sm) 0;
 }
 
 .context-menu-item {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  gap: 8px;
+  padding: var(--spacing-md) var(--spacing-xl);
+  gap: var(--spacing-md);
   cursor: pointer;
-  transition: background-color 0.2s;
-  font-size: 14px;
-  color: #333;
+  font-size: var(--font-size-item-title);
+  color: var(--color-text-primary);
 }
 
 .context-menu-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--color-hover-bg);
 }
 
 .context-menu-item.danger {
@@ -29,13 +28,14 @@
 }
 
 .context-menu-item.danger:hover {
-  background-color: #ffebee;
+  background-color: var(--color-hover-bg);
 }
 
 .context-menu-icon {
-  font-size: 16px;
+  font-size: var(--icon-size-large);
   width: 20px;
   text-align: center;
+  color: var(--color-text-secondary);
 }
 
 .context-menu-label {

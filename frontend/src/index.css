@@ -1,15 +1,51 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Google Reader Design System - Color Palette */
+:root {
+  /* Primary Colors - Classic Google Reader */
+  --color-text-primary: #333333;
+  --color-text-secondary: #777777;
+  --color-highlight: #DD4B39;  /* Google red */
+  --color-border: #E5E5E5;
+  --color-hover-bg: #F5F5F5;
+  --color-sidebar-bg: #FAFAFA;
+  --color-unread-blue: #3366CC;  /* Classic Google link blue */
+  --color-white: #FFFFFF;
+  --color-visited: #551A8B;  /* Visited link purple */
+  
+  /* Status Colors */
+  --color-star: #FFBB00;  /* Google Reader star yellow */
+  --color-unread-indicator: #3366CC;
+  
+  /* Typography - Web 2.0 Reader Style */
+  --font-family-base: Arial, Helvetica, sans-serif;
+  --font-family-code: 'Courier New', Courier, monospace;
+  
+  /* Font Sizes - Classic Reader Sizing */
+  --font-size-feed-title: 15px;
+  --font-size-item-title: 14px;
+  --font-size-metadata: 11px;
+  --font-size-nav: 13px;
+  --font-size-button: 14px;
+  --font-size-section-title: 13px;
+  
+  /* Spacing - Tight but readable (Google Reader style) */
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 6px;
+  --spacing-lg: 8px;
+  --spacing-xl: 12px;
+  
+  /* Layout */
+  --sidebar-width: 280px;
+  --middle-panel-width: 400px;
+  --border-width: 1px;
+  
+  /* Icon sizes */
+  --icon-size: 14px;
+  --icon-size-large: 16px;
+  
+  /* Border radius - minimal for Reader style */
+  --border-radius-none: 0;
+  --border-radius-minimal: 2px;
 }
 
 * {
@@ -19,4 +55,19 @@ code {
 html, body, #root {
   height: 100%;
   overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text-primary);
+  background-color: var(--color-white);
+}
+
+code {
+  font-family: var(--font-family-code);
 }

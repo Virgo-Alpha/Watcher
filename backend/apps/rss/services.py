@@ -320,3 +320,290 @@ class RSSService:
         cache_key = self._get_cache_key(haunt)
         cache.delete(cache_key)
         logger.debug('Invalidated RSS feed cache for haunt %s', haunt.id)
+
+
+
+class EmailNotificationService:
+    """
+    Service for sending email notifications about haunt changes.
+    """
+    
+    @staticmethod
+    def get_notification_recipients(haunt: Haunt) -> list:
+        """
+        Get list of users who should receive notifications for this haunt.
+        
+        Args:
+            haunt: The haunt that changed
+            
+        Returns:
+            List of User objects who should be notified
+        """
+        from django.contrib.auth import get_user_model
+        from apps.subscriptions.models import Subscription
+        
+        User = get_user_model()
+        recipients = []
+        
+        # Add haunt owner if they have notifications enabled
+        if haunt.owner.email_notifications_enabled:
+            recipients.append(haunt.owner)
+            logger.debug(f'Added owner {haunt.owner.email} to recipients')
+        
+        # Add subscribers who have notifications enabled
+        if haunt.is_public:
+            subscriptions = Subscription.objects.filter(
+                haunt=haunt,
+                notifications_enabled=True,
+                user__email_notifications_enabled=True
+            ).select_related('user')
+            
+            for subscription in subscriptions:
+                if subscription.user != haunt.owner:  # Don't duplicate owner
+                    recipients.append(subscription.user)
+                    logger.debug(f'Added subscriber {subscription.user.email} to recipients')
+        
+        logger.info(f'Found {len(recipients)} recipients for haunt {haunt.id}')
+        return recipients
+    
+    @staticmethod
+    def send_change_notification(rss_item: RSSItem) -> dict:
+        """
+        Send email notification about a haunt change.
+        
+        Args:
+            rss_item: The RSS item representing the change
+            
+        Returns:
+            dict with 'sent' count and 'failed' count
+        """
+        from django.core.mail import EmailMultiAlternatives
+        from django.conf import settings
+        
+        haunt = rss_item.haunt
+        recipients = EmailNotificationService.get_notification_recipients(haunt)
+        
+        if not recipients:
+            logger.info(f'No recipients for haunt {haunt.id}, skipping email')
+            return {'sent': 0, 'failed': 0}
+        
+        # Prepare email content
+        subject = f'[Watcher] {haunt.name} - Change Detected'
+        
+        # Plain text version
+        text_content = EmailNotificationService._render_text_email(rss_item)
+        
+        # HTML version
+        html_content = EmailNotificationService._render_html_email(rss_item)
+        
+        # Send emails
+        sent_count = 0
+        failed_count = 0
+        
+        for user in recipients:
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@watcher.local',
+                    to=[user.email]
+                )
+                msg.attach_alternative(html_content, "text/html")
+                msg.send()
+                
+                sent_count += 1
+                logger.info(f'Sent notification to {user.email} for haunt {haunt.id}')
+                
+            except Exception as e:
+                failed_count += 1
+                logger.error(f'Failed to send notification to {user.email}: {e}')
+        
+        logger.info(f'Email notification complete: {sent_count} sent, {failed_count} failed')
+        return {'sent': sent_count, 'failed': failed_count}
+    
+    @staticmethod
+    def _render_text_email(rss_item: RSSItem) -> str:
+        """
+        Render plain text email content.
+        
+        Args:
+            rss_item: The RSS item to render
+            
+        Returns:
+            Plain text email content
+        """
+        haunt = rss_item.haunt
+        
+        lines = [
+            f'Change detected in: {haunt.name}',
+            f'URL: {haunt.url}',
+            '',
+            f'Title: {rss_item.title}',
+            '',
+        ]
+        
+        # Add summary if available
+        if rss_item.ai_summary:
+            lines.append('Summary:')
+            lines.append(rss_item.ai_summary)
+            lines.append('')
+        
+        # Add changes
+        if rss_item.change_data:
+            lines.append('Changes:')
+            for field, change in rss_item.change_data.items():
+                if isinstance(change, dict) and 'old' in change and 'new' in change:
+                    lines.append(f'  • {field}:')
+                    lines.append(f'    Old: {change["old"]}')
+                    lines.append(f'    New: {change["new"]}')
+                else:
+                    lines.append(f'  • {field}: {change}')
+            lines.append('')
+        
+        lines.append('---')
+        lines.append('View in Watcher: [Link to your Watcher instance]')
+        lines.append('')
+        lines.append('To disable these notifications, update your settings in Watcher.')
+        
+        return '\n'.join(lines)
+    
+    @staticmethod
+    def _render_html_email(rss_item: RSSItem) -> str:
+        """
+        Render HTML email content.
+        
+        Args:
+            rss_item: The RSS item to render
+            
+        Returns:
+            HTML email content
+        """
+        haunt = rss_item.haunt
+        
+        html = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: Arial, Helvetica, sans-serif;
+                    color: #333333;
+                    line-height: 1.6;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }}
+                .header {{
+                    background-color: #FAFAFA;
+                    border-left: 4px solid #DD4B39;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                }}
+                .haunt-name {{
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #333333;
+                    margin: 0 0 5px 0;
+                }}
+                .haunt-url {{
+                    font-size: 13px;
+                    color: #777777;
+                    margin: 0;
+                }}
+                .content {{
+                    padding: 15px 0;
+                }}
+                .title {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #3366CC;
+                    margin: 0 0 15px 0;
+                }}
+                .summary {{
+                    background-color: #F5F5F5;
+                    padding: 12px;
+                    border-radius: 4px;
+                    margin: 15px 0;
+                    font-size: 14px;
+                }}
+                .changes {{
+                    margin: 15px 0;
+                }}
+                .change-item {{
+                    margin: 10px 0;
+                    padding: 10px;
+                    background-color: #FAFAFA;
+                    border-left: 3px solid #E5E5E5;
+                }}
+                .change-field {{
+                    font-weight: bold;
+                    color: #333333;
+                }}
+                .change-value {{
+                    color: #777777;
+                    font-size: 13px;
+                    margin: 3px 0;
+                }}
+                .old-value {{
+                    text-decoration: line-through;
+                    color: #999999;
+                }}
+                .new-value {{
+                    color: #DD4B39;
+                    font-weight: bold;
+                }}
+                .footer {{
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #E5E5E5;
+                    font-size: 12px;
+                    color: #777777;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <p class="haunt-name">{haunt.name}</p>
+                <p class="haunt-url">{haunt.url}</p>
+            </div>
+            
+            <div class="content">
+                <p class="title">{rss_item.title}</p>
+        '''
+        
+        # Add summary if available
+        if rss_item.ai_summary:
+            html += f'''
+                <div class="summary">
+                    {rss_item.ai_summary}
+                </div>
+            '''
+        
+        # Add changes
+        if rss_item.change_data:
+            html += '<div class="changes"><strong>Changes:</strong>'
+            for field, change in rss_item.change_data.items():
+                html += f'<div class="change-item">'
+                html += f'<div class="change-field">{field}</div>'
+                
+                if isinstance(change, dict) and 'old' in change and 'new' in change:
+                    html += f'<div class="change-value old-value">Old: {change["old"]}</div>'
+                    html += f'<div class="change-value new-value">New: {change["new"]}</div>'
+                else:
+                    html += f'<div class="change-value">{change}</div>'
+                
+                html += '</div>'
+            html += '</div>'
+        
+        html += '''
+            </div>
+            
+            <div class="footer">
+                <p>To disable these notifications, update your settings in Watcher.</p>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return html

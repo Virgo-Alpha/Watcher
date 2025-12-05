@@ -70,6 +70,16 @@ const SetupWizard: React.FC = () => {
       // Run test scrape before showing preview
       setLoading(true);
       try {
+        // Debug: Check token before making request
+        const token = localStorage.getItem('accessToken');
+        console.log('[SetupWizard] About to call testScrape, token present:', !!token);
+        if (!token) {
+          console.error('[SetupWizard] No token found in localStorage!');
+          setError('Authentication error. Please refresh the page and try again.');
+          setLoading(false);
+          return;
+        }
+        
         const previewData = await apiClient.testScrape({
           url: wizardData.url,
           description: wizardData.description,
@@ -77,6 +87,7 @@ const SetupWizard: React.FC = () => {
         setWizardData({ ...wizardData, previewData });
         setCurrentStep('preview');
       } catch (err: any) {
+        console.error('[SetupWizard] testScrape error:', err);
         setError(err.message || 'Failed to test scrape. Please check your URL and description.');
       } finally {
         setLoading(false);

@@ -329,13 +329,23 @@ class HauntViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Return haunts based on user permissions.
-        - Authenticated users see their own haunts
+        - Authenticated users see their own haunts AND subscribed haunts
         - Public haunts are visible to all authenticated users
         """
         user = self.request.user
         if user.is_authenticated:
-            # Return user's own haunts plus public haunts they might want to view
-            return Haunt.objects.filter(owner=user).select_related('folder', 'owner')
+            # Return user's own haunts plus haunts they're subscribed to
+            from django.db.models import Q, Prefetch
+            from apps.subscriptions.models import Subscription
+            
+            # Prefetch subscriptions for the current user to avoid N+1 queries
+            user_subscriptions = Subscription.objects.filter(user=user)
+            
+            return Haunt.objects.filter(
+                Q(owner=user) | Q(subscriptions__user=user)
+            ).distinct().select_related('folder', 'owner').prefetch_related(
+                Prefetch('subscriptions', queryset=user_subscriptions, to_attr='user_subscriptions_cache')
+            )
         return Haunt.objects.none()
 
     def get_serializer_class(self):
@@ -495,8 +505,7 @@ class HauntViewSet(viewsets.ModelViewSet):
             "description": "Monitor the admission status",
             "name": "Optional name",
             "folder": "Optional folder ID",
-            "scrape_interval": 60,
-            "alert_mode": "on_change"
+            "scrape_interval": 60
         }
         """
         serializer = HauntCreateWithAISerializer(
@@ -510,7 +519,6 @@ class HauntViewSet(viewsets.ModelViewSet):
         name = serializer.validated_data.get('name')
         folder = serializer.validated_data.get('folder')
         scrape_interval = serializer.validated_data.get('scrape_interval', 60)
-        alert_mode = serializer.validated_data.get('alert_mode', 'on_change')
 
         # Validate URL to prevent SSRF attacks
         is_valid, error_msg = validate_url_security(url)
@@ -546,8 +554,7 @@ class HauntViewSet(viewsets.ModelViewSet):
                 description=description,
                 config=config,
                 folder=folder,
-                scrape_interval=scrape_interval,
-                alert_mode=alert_mode
+                scrape_interval=scrape_interval
             )
 
             logger.info("Successfully created haunt with AI: %s", haunt.id)
@@ -652,6 +659,19 @@ class HauntViewSet(viewsets.ModelViewSet):
         }
         Returns generated configuration for preview.
         """
+        # Debug logging - log ALL relevant headers
+        auth_header = request.META.get('HTTP_AUTHORIZATION', 'NOT PRESENT')
+        logger.info(f"[generate_config_preview] Authorization header: {auth_header[:50] if auth_header != 'NOT PRESENT' else auth_header}")
+        logger.info(f"[generate_config_preview] User authenticated: {request.user.is_authenticated}")
+        logger.info(f"[generate_config_preview] User: {request.user}")
+        logger.info(f"[generate_config_preview] Request method: {request.method}")
+        logger.info(f"[generate_config_preview] Content-Type: {request.META.get('CONTENT_TYPE', 'NOT SET')}")
+        logger.info(f"[generate_config_preview] Origin: {request.META.get('HTTP_ORIGIN', 'NOT SET')}")
+        
+        # Log all HTTP_ headers for debugging
+        http_headers = {k: v for k, v in request.META.items() if k.startswith('HTTP_')}
+        logger.info(f"[generate_config_preview] All HTTP headers: {http_headers}")
+        
         url = request.data.get('url')
         description = request.data.get('description')
 
@@ -852,6 +872,44 @@ class HauntViewSet(viewsets.ModelViewSet):
                 response_data['next_scrape_at'] = 'pending'
 
         return Response(response_data)
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def public(self, request):
+        """
+        List all public haunts in the directory.
+        Accessible without authentication.
+        Query params:
+        - search: Search in name, description, or URL
+        - owner: Filter by owner username
+        """
+        queryset = Haunt.objects.filter(
+            is_public=True,
+            is_active=True
+        ).select_related('folder', 'owner').order_by('-created_at')
+
+        # Search functionality
+        search_query = request.query_params.get('search')
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(name__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(url__icontains=search_query)
+            )
+
+        # Filter by owner
+        owner_username = request.query_params.get('owner')
+        if owner_username:
+            queryset = queryset.filter(owner__username=owner_username)
+
+        # Paginate results
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class PublicHauntViewSet(viewsets.ReadOnlyModelViewSet):

@@ -24,6 +24,18 @@ export const login = createAsyncThunk(
   }
 );
 
+export const register = createAsyncThunk(
+  'auth/register',
+  async (userData: any, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.register(userData);
+      return response;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const logout = createAsyncThunk(
   'auth/logout',
   async () => {
@@ -35,9 +47,12 @@ export const fetchCurrentUser = createAsyncThunk(
   'auth/fetchCurrentUser',
   async (_, { rejectWithValue }) => {
     try {
+      console.log('[fetchCurrentUser] Starting user fetch...');
       const user = await apiClient.getCurrentUser();
+      console.log('[fetchCurrentUser] User fetched successfully:', user.email);
       return user;
     } catch (error: any) {
+      console.error('[fetchCurrentUser] Failed to fetch user:', error.message);
       return rejectWithValue(error.message);
     }
   }
@@ -84,6 +99,10 @@ const authSlice = createSlice({
       localStorage.setItem('refreshToken', action.payload.refresh);
       // Update apiClient token
       apiClient.setAccessToken(action.payload.access);
+      
+      console.log('[authSlice] Login successful!');
+      console.log('[authSlice] Token saved to localStorage:', !!localStorage.getItem('accessToken'));
+      console.log('[authSlice] User:', action.payload.user.email);
     });
     builder.addCase(login.rejected, (state, action) => {
       state.loading = false;
@@ -115,9 +134,12 @@ const authSlice = createSlice({
     builder.addCase(fetchCurrentUser.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
-      state.isAuthenticated = false;
-      state.accessToken = null;
-      state.refreshToken = null;
+      console.error('[authSlice] fetchCurrentUser rejected:', action.payload);
+      
+      // IMPORTANT: Don't clear authentication state here!
+      // The API client will handle 401 errors and redirect to login if needed.
+      // Clearing tokens here causes the user to be logged out even on network errors.
+      // The token remains valid until the API client explicitly clears it on a real 401.
     });
 
     // Refresh token
@@ -125,9 +147,9 @@ const authSlice = createSlice({
       state.accessToken = action.payload.access;
     });
     builder.addCase(refreshToken.rejected, (state) => {
-      state.isAuthenticated = false;
-      state.accessToken = null;
-      state.refreshToken = null;
+      console.error('[authSlice] refreshToken rejected');
+      // Don't clear tokens here - let the API client handle it
+      // The API client will clear tokens and redirect on actual auth failures
     });
   },
 });

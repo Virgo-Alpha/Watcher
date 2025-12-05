@@ -85,12 +85,12 @@ class SubscriptionService:
         Get unread counts for all haunts and folders for a user.
         Returns dict with 'haunts' and 'folders' keys.
         """
+        from django.db.models import Q
+        
         # Get all haunts user owns or is subscribed to
-        owned_haunts = Haunt.objects.filter(owner=user)
-        subscribed_haunts = Haunt.objects.filter(
-            subscriptions__user=user
-        )
-        all_haunts = owned_haunts.union(subscribed_haunts)
+        all_haunts = Haunt.objects.filter(
+            Q(owner=user) | Q(subscriptions__user=user)
+        ).distinct()
 
         # Get all RSS items for these haunts
         rss_items = RSSItem.objects.filter(haunt__in=all_haunts)

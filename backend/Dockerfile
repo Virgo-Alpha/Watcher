@@ -29,6 +29,9 @@ RUN playwright install --with-deps chromium
 # Copy project
 COPY . /app/
 
+# Make entrypoint script executable
+RUN chmod +x /app/scripts/entrypoint.sh
+
 # Create non-root user for security
 RUN adduser --disabled-password --gecos '' appuser \
     && chown -R appuser:appuser /app \
@@ -37,6 +40,9 @@ USER appuser
 
 # Expose port
 EXPOSE 8000
+
+# Set entrypoint
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 
 # Default command
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

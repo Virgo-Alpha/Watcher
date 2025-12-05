@@ -18,6 +18,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api
 class APIClient {
   private baseURL: string;
   private accessToken: string | null = null;
+  private refreshPromise: Promise<string> | null = null;
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
@@ -36,30 +37,129 @@ class APIClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount: number = 0
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
+    
+    // Always check localStorage for the latest token FIRST
+    const token = localStorage.getItem('accessToken');
+    
+    // Build headers with token if available
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      // Sync in-memory token with localStorage
+      if (this.accessToken !== token) {
+        this.accessToken = token;
+      }
+    } else {
+      // Clear in-memory token if localStorage is empty
+      this.accessToken = null;
     }
+
+    console.log('[API Client] Making request to:', endpoint);
+    console.log('[API Client] Token present:', !!token);
+    console.log('[API Client] Authorization header:', headers['Authorization'] ? 'set' : 'missing');
 
     const response = await fetch(url, {
       ...options,
       headers,
+      mode: 'cors',
+      credentials: 'include', // Ensure cookies are sent if needed
     });
 
     if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      
       if (response.status === 401) {
-        // Token expired or invalid
+        console.error('[API Client] 401 Unauthorized:', {
+          endpoint,
+          tokenWasPresent: !!token,
+          error: error.detail || 'No error detail',
+          retryCount
+        });
+        
+        // If token was present and this is the first attempt, try to refresh the token
+        if (token && retryCount === 0 && !endpoint.includes('/auth/')) {
+          console.log('[API Client] Attempting to refresh token...');
+          
+          // If a refresh is already in progress, wait for it
+          if (this.refreshPromise) {
+            console.log('[API Client] Refresh already in progress, waiting...');
+            try {
+              await this.refreshPromise;
+              console.log('[API Client] Refresh completed, retrying request...');
+              return this.request<T>(endpoint, options, retryCount + 1);
+            } catch (refreshError) {
+              console.error('[API Client] Refresh failed, logging out');
+              this.setAccessToken(null);
+              localStorage.removeItem('refreshToken');
+              window.location.href = '/login';
+              throw new Error('Authentication failed');
+            }
+          }
+          
+          // Start a new refresh
+          this.refreshPromise = (async () => {
+            try {
+              const refreshToken = localStorage.getItem('refreshToken');
+              if (!refreshToken) {
+                throw new Error('No refresh token available');
+              }
+              
+              const refreshResponse = await fetch(`${this.baseURL}/auth/refresh/`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ refresh: refreshToken }),
+                mode: 'cors',
+                credentials: 'include',
+              });
+              
+              if (!refreshResponse.ok) {
+                const errorData = await refreshResponse.json().catch(() => ({}));
+                console.error('[API Client] Token refresh failed:', errorData);
+                throw new Error('Token refresh failed');
+              }
+              
+              const refreshData = await refreshResponse.json();
+              this.setAccessToken(refreshData.access);
+              console.log('[API Client] Token refreshed successfully');
+              return refreshData.access;
+            } finally {
+              this.refreshPromise = null;
+            }
+          })();
+          
+          try {
+            await this.refreshPromise;
+            console.log('[API Client] Retrying request with new token...');
+            return this.request<T>(endpoint, options, retryCount + 1);
+          } catch (refreshError) {
+            console.error('[API Client] Token refresh failed, logging out');
+            this.setAccessToken(null);
+            localStorage.removeItem('refreshToken');
+            window.location.href = '/login';
+            throw new Error('Authentication failed');
+          }
+        }
+        
+        // If we get here with a 401, it means:
+        // 1. No token was present initially, OR
+        // 2. This is an auth endpoint, OR
+        // 3. Token refresh already failed (retryCount > 0)
+        console.log('[API Client] Clearing token and redirecting to login');
         this.setAccessToken(null);
+        localStorage.removeItem('refreshToken');
         window.location.href = '/login';
       }
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
@@ -68,9 +168,39 @@ class APIClient {
 
   // Authentication
   async login(credentials: LoginRequest): Promise<LoginResponse> {
+    console.log('[API Client] Logging in with:', credentials.email);
     const response = await this.request<LoginResponse>('/auth/login/', {
       method: 'POST',
       body: JSON.stringify(credentials),
+    });
+    console.log('[API Client] Login response:', {
+      hasUser: !!response.user,
+      hasAccess: !!response.access,
+      hasRefresh: !!response.refresh,
+      accessToken: response.access ? `${response.access.substring(0, 20)}...` : 'NULL',
+    });
+    this.setAccessToken(response.access);
+    localStorage.setItem('refreshToken', response.refresh);
+    return response;
+  }
+
+  async register(userData: {
+    email: string;
+    username: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+  }): Promise<LoginResponse> {
+    console.log('[API Client] Registering user:', userData.email);
+    const response = await this.request<LoginResponse>('/auth/register/', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+    console.log('[API Client] Registration response:', {
+      hasUser: !!response.user,
+      hasAccess: !!response.access,
+      hasRefresh: !!response.refresh,
     });
     this.setAccessToken(response.access);
     localStorage.setItem('refreshToken', response.refresh);
@@ -96,12 +226,18 @@ class APIClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.request<User>('/auth/user/');
+    return this.request<User>('/auth/profile/');
   }
 
   // Haunts
   async getHaunts(): Promise<Haunt[]> {
-    return this.request<Haunt[]>('/haunts/');
+    const response = await this.request<{ results: Haunt[] } | Haunt[]>('/haunts/');
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as Haunt[];
   }
 
   async getHaunt(id: string): Promise<Haunt> {
@@ -135,9 +271,19 @@ class APIClient {
   }
 
   async testScrape(data: TestScrapeRequest): Promise<TestScrapeResponse> {
-    return this.request<TestScrapeResponse>('/haunts/test-scrape/', {
+    console.log('[API Client] testScrape called with data:', data);
+    console.log('[API Client] Current token in localStorage:', localStorage.getItem('accessToken') ? 'present' : 'missing');
+    console.log('[API Client] Current token in memory:', this.accessToken ? 'present' : 'missing');
+    return this.request<TestScrapeResponse>('/haunts/generate-config-preview/', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async testScrapeWithConfig(url: string, config: any): Promise<any> {
+    return this.request<any>('/haunts/test-scrape/', {
+      method: 'POST',
+      body: JSON.stringify({ url, config }),
     });
   }
 
@@ -149,7 +295,13 @@ class APIClient {
 
   // Folders
   async getFolders(): Promise<Folder[]> {
-    return this.request<Folder[]>('/folders/');
+    const response = await this.request<{ results: Folder[] } | Folder[]>('/folders/');
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as Folder[];
   }
 
   async createFolder(name: string, parent: string | null = null): Promise<Folder> {
@@ -175,7 +327,13 @@ class APIClient {
   // RSS Items
   async getRSSItems(hauntId?: string): Promise<RSSItem[]> {
     const endpoint = hauntId ? `/rss/items/?haunt=${hauntId}` : '/rss/items/';
-    return this.request<RSSItem[]>(endpoint);
+    const response = await this.request<{ results: RSSItem[] } | RSSItem[]>(endpoint);
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as RSSItem[];
   }
 
   async getRSSItem(id: string): Promise<RSSItem> {
@@ -184,13 +342,19 @@ class APIClient {
 
   // Subscriptions
   async getSubscriptions(): Promise<Subscription[]> {
-    return this.request<Subscription[]>('/subscriptions/');
+    const response = await this.request<{ results: Subscription[] } | Subscription[]>('/subscriptions/');
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as Subscription[];
   }
 
   async subscribe(hauntId: string): Promise<Subscription> {
     return this.request<Subscription>('/subscriptions/', {
       method: 'POST',
-      body: JSON.stringify({ haunt: hauntId }),
+      body: JSON.stringify({ haunt_id: hauntId }),
     });
   }
 
@@ -201,13 +365,25 @@ class APIClient {
   }
 
   async getPublicHaunts(): Promise<Haunt[]> {
-    return this.request<Haunt[]>('/haunts/public/');
+    const response = await this.request<{ results: Haunt[] } | Haunt[]>('/haunts/public/');
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as Haunt[];
   }
 
   // Read States
   async getReadStates(hauntId?: string): Promise<UserReadState[]> {
     const endpoint = hauntId ? `/read-states/?haunt=${hauntId}` : '/read-states/';
-    return this.request<UserReadState[]>(endpoint);
+    const response = await this.request<{ results: UserReadState[] } | UserReadState[]>(endpoint);
+    // Handle paginated response
+    if (response && typeof response === 'object' && 'results' in response) {
+      return response.results;
+    }
+    // Handle non-paginated response (fallback)
+    return response as UserReadState[];
   }
 
   async markAsRead(itemId: string): Promise<UserReadState> {

@@ -11,6 +11,12 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Email notification preferences
+    email_notifications_enabled = models.BooleanField(
+        default=True,
+        help_text='Enable email notifications for haunt changes'
+    )
+    
     # Make email the username field for authentication
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

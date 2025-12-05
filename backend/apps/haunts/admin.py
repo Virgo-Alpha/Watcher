@@ -83,10 +83,10 @@ class HauntAdmin(admin.ModelAdmin):
     
     list_display = (
         'name', 'owner', 'folder', 'url_link', 'is_active', 'is_public', 
-        'scrape_interval_display', 'alert_mode', 'is_healthy_display', 'created_at'
+        'scrape_interval_display', 'is_healthy_display', 'created_at'
     )
     list_filter = (
-        'is_active', 'is_public', 'alert_mode', 'scrape_interval', 
+        'is_active', 'is_public', 'scrape_interval', 
         'created_at', 'last_scraped_at'
     )
     search_fields = ('name', 'url', 'description', 'owner__email', 'owner__username')
@@ -101,7 +101,7 @@ class HauntAdmin(admin.ModelAdmin):
             'fields': ('id', 'owner', 'folder', 'name', 'url', 'description')
         }),
         ('Configuration', {
-            'fields': ('config', 'scrape_interval', 'alert_mode')
+            'fields': ('config', 'scrape_interval', 'enable_ai_summary')
         }),
         ('State', {
             'fields': ('current_state', 'last_alert_state', 'is_active')

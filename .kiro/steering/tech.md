@@ -6,7 +6,7 @@
 - **Frontend**: React with Redux for state management
 - **Background Processing**: Celery with Redis broker
 - **Browser Automation**: Playwright for SPA-compatible scraping
-- **AI Integration**: OpenAI API for natural language configuration generation
+- **AI Integration**: Google Gemini API (via AI Studio) for natural language configuration generation
 
 ## Core Technologies
 
@@ -30,7 +30,8 @@
 - **Environment-based configuration** for dev/staging/prod
 
 ### AI Integration
-- **OpenAI GPT-3.5-turbo** for converting natural language descriptions to CSS selectors
+- **Google Gemini 1.5 Flash** (via AI Studio) for converting natural language descriptions to CSS selectors
+- **API Key**: Get from https://aistudio.google.com/app/apikey (starts with 'AIzaSy')
 - **Configuration validation** with JSON schema validation
 - **Fallback summaries** when AI service is unavailable
 - **Rate limiting** and error handling for API calls
@@ -110,7 +111,7 @@ docker-compose exec web python manage.py loaddata fixtures/sample_data.json
 - `playwright>=1.40`
 - `psycopg2-binary>=2.9`
 - `djangorestframework-simplejwt>=5.3`
-- `openai>=1.3` - OpenAI API client for AI-powered configuration generation
+- `google-generativeai>=0.3` - Google Gemini API client for AI-powered configuration generation
 
 ### Node.js (package.json)
 - `react>=18.0`

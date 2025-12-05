@@ -15,7 +15,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   useEffect(() => {
     // If we have a token but no user data, fetch the current user
     if (isAuthenticated && !user && !loading) {
-      dispatch(fetchCurrentUser());
+      console.log('[ProtectedRoute] Fetching current user...');
+      console.log('[ProtectedRoute] Token in localStorage:', localStorage.getItem('accessToken') ? 'present' : 'missing');
+      dispatch(fetchCurrentUser()).catch((error) => {
+        console.error('[ProtectedRoute] Failed to fetch user:', error);
+      });
     }
   }, [isAuthenticated, user, loading, dispatch]);
 

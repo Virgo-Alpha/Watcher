@@ -13,7 +13,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
     )
     list_filter = (
         'notifications_enabled', 'subscribed_at', 'haunt__is_active', 
-        'haunt__is_public', 'haunt__alert_mode'
+        'haunt__is_public'
     )
     search_fields = (
         'user__email', 'user__username', 'haunt__name', 

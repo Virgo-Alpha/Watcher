@@ -116,20 +116,21 @@ class HauntSerializer(serializers.ModelSerializer):
     folder_name = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     scrape_interval_display = serializers.ReadOnlyField()
-    alert_mode_display = serializers.ReadOnlyField()
     is_healthy = serializers.ReadOnlyField()
     public_url = serializers.SerializerMethodField()
     rss_url = serializers.SerializerMethodField()
+    is_subscribed = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
     
     class Meta:
         model = Haunt
         fields = [
             'id', 'name', 'url', 'description', 'config', 'current_state',
-            'last_alert_state', 'alert_mode', 'alert_mode_display', 'scrape_interval',
-            'scrape_interval_display', 'enable_ai_summary', 'is_public', 'public_slug',
-            'is_active', 'last_scraped_at', 'last_error', 'error_count', 'is_healthy',
+            'last_alert_state', 'scrape_interval', 'scrape_interval_display',
+            'enable_ai_summary', 'is_public', 'public_slug', 'is_active',
+            'last_scraped_at', 'last_error', 'error_count', 'is_healthy',
             'folder', 'folder_name', 'unread_count', 'public_url', 'rss_url',
-            'created_at', 'updated_at'
+            'is_subscribed', 'owner_email', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'public_slug', 'last_scraped_at', 'last_error', 'error_count',
@@ -158,6 +159,28 @@ class HauntSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         return obj.get_rss_url(request)
     
+    def get_is_subscribed(self, obj):
+        """Check if current user is subscribed to this haunt (vs owning it)"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        # If user owns the haunt, they're not subscribed
+        if obj.owner == request.user:
+            return False
+        
+        # Use prefetched subscriptions if available to avoid N+1 queries
+        if hasattr(obj, 'user_subscriptions_cache'):
+            return len(obj.user_subscriptions_cache) > 0
+        
+        # Fallback to query if not prefetched (e.g., single object retrieval)
+        from apps.subscriptions.models import Subscription
+        return Subscription.objects.filter(user=request.user, haunt=obj).exists()
+    
+    def get_owner_email(self, obj):
+        """Get owner email for subscribed haunts"""
+        return obj.owner.email if obj.owner else None
+    
     def validate_folder(self, value):
         """Validate folder belongs to same user"""
         if value:
@@ -171,7 +194,7 @@ class HauntSerializer(serializers.ModelSerializer):
     def validate_config(self, value):
         """Validate configuration structure"""
         if value and value != {}:
-            required_keys = ['selectors', 'normalization', 'truthy_values']
+            required_keys = ['selectors', 'normalization']
             for key in required_keys:
                 if key not in value:
                     raise serializers.ValidationError(
@@ -185,15 +208,6 @@ class HauntSerializer(serializers.ModelSerializer):
         if value not in allowed_intervals:
             raise serializers.ValidationError(
                 f'Scrape interval must be one of: {allowed_intervals}'
-            )
-        return value
-    
-    def validate_alert_mode(self, value):
-        """Validate alert mode is one of allowed values"""
-        allowed_modes = [choice[0] for choice in Haunt.ALERT_MODES]
-        if value not in allowed_modes:
-            raise serializers.ValidationError(
-                f'Alert mode must be one of: {allowed_modes}'
             )
         return value
     
@@ -211,18 +225,42 @@ class HauntListSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField()
     scrape_interval_display = serializers.ReadOnlyField()
     is_healthy = serializers.ReadOnlyField()
+    is_subscribed = serializers.SerializerMethodField()
+    owner_email = serializers.SerializerMethodField()
     
     class Meta:
         model = Haunt
         fields = [
             'id', 'name', 'url', 'is_public', 'is_active', 'folder', 'folder_name',
             'unread_count', 'scrape_interval', 'scrape_interval_display',
-            'last_scraped_at', 'is_healthy', 'created_at'
+            'last_scraped_at', 'is_healthy', 'is_subscribed', 'owner_email', 'created_at'
         ]
     
     def get_folder_name(self, obj):
         """Get folder name if haunt is in a folder"""
         return obj.folder.name if obj.folder else None
+    
+    def get_is_subscribed(self, obj):
+        """Check if current user is subscribed to this haunt (vs owning it)"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        
+        # If user owns the haunt, they're not subscribed
+        if obj.owner == request.user:
+            return False
+        
+        # Use prefetched subscriptions if available to avoid N+1 queries
+        if hasattr(obj, 'user_subscriptions_cache'):
+            return len(obj.user_subscriptions_cache) > 0
+        
+        # Fallback to query if not prefetched (e.g., single object retrieval)
+        from apps.subscriptions.models import Subscription
+        return Subscription.objects.filter(user=request.user, haunt=obj).exists()
+    
+    def get_owner_email(self, obj):
+        """Get owner email for subscribed haunts"""
+        return obj.owner.email if obj.owner else None
     
     def get_unread_count(self, obj):
         """Get count of unread RSS items for this haunt"""
@@ -259,14 +297,9 @@ class HauntCreateWithAISerializer(serializers.Serializer):
         default=60,
         help_text="How often to scrape (in minutes)"
     )
-    alert_mode = serializers.ChoiceField(
-        choices=Haunt.ALERT_MODES,
-        default='on_change',
-        help_text="When to send alerts"
-    )
     enable_ai_summary = serializers.BooleanField(
         default=True,
-        help_text="Enable AI-generated summaries for changes"
+        help_text="Enable AI-generated summaries and alert decisions"
     )
 
     def validate_folder(self, value):

@@ -1,21 +1,23 @@
 .haunt-item {
   display: flex;
   align-items: center;
-  padding: 10px 0;
-  gap: 8px;
+  padding: var(--spacing-md) 0;
+  gap: var(--spacing-sm);
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.2s;
-  border-left: 3px solid transparent;
   user-select: none;
 }
 
 .haunt-item:hover {
-  background-color: #f0f0f0;
+  background-color: var(--color-hover-bg);
 }
 
-.haunt-item.selected {
-  background-color: #e3f2fd;
-  border-left-color: #2196f3;
+.haunt-item:hover .haunt-name {
+  text-decoration: underline;
+}
+
+.haunt-item.selected .haunt-name {
+  color: var(--color-unread-blue);
+  font-weight: bold;
 }
 
 .haunt-item.dragging {
@@ -23,19 +25,20 @@
 }
 
 .haunt-icon {
-  font-size: 16px;
+  font-size: var(--icon-size);
+  color: var(--color-text-secondary);
 }
 
 .haunt-name {
   flex: 1;
-  font-size: 14px;
-  color: #333;
+  font-size: var(--font-size-nav);
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .public-indicator {
-  font-size: 14px;
-  opacity: 0.6;
+  font-size: var(--icon-size);
+  color: var(--color-text-secondary);
 }

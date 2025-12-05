@@ -48,7 +48,6 @@ class ScrapingTasksTest(TestCase):
                 }
             },
             current_state={},
-            alert_mode='on_change',
             scrape_interval=15,
             is_active=True
         )
@@ -172,43 +171,7 @@ class ScrapingTasksTest(TestCase):
         self.assertEqual(rss_items.count(), 1)
         self.assertIn('status', rss_items.first().change_data)
 
-    @patch('apps.scraping.services.ScrapingService.scrape_url')
-    def test_scrape_haunt_alert_mode_once(self, mock_scrape_url):
-        """Test scrape_haunt with alert_mode='once'"""
-        # Set alert mode to once
-        self.haunt.alert_mode = 'once'
-        self.haunt.current_state = {'status': 'closed'}
-        self.haunt.last_alert_state = None
-        self.haunt.save()
-
-        # Mock scraping to return truthy state
-        mock_scrape_url.return_value = {'status': 'open'}
-
-        result = scrape_haunt(str(self.haunt.id))
-
-        self.assertEqual(result['status'], 'success')
-        self.assertTrue(result['should_alert'])
-
-        # Verify alert state was updated
-        self.haunt.refresh_from_db()
-        self.assertEqual(self.haunt.last_alert_state, {'status': 'open'})
-
-    @patch('apps.scraping.services.ScrapingService.scrape_url')
-    def test_scrape_haunt_alert_mode_once_already_alerted(self, mock_scrape_url):
-        """Test scrape_haunt with alert_mode='once' when already alerted"""
-        # Set alert mode to once with previous alert
-        self.haunt.alert_mode = 'once'
-        self.haunt.current_state = {'status': 'open'}
-        self.haunt.last_alert_state = {'status': 'open'}
-        self.haunt.save()
-
-        # Mock scraping to return same truthy state
-        mock_scrape_url.return_value = {'status': 'open'}
-
-        result = scrape_haunt(str(self.haunt.id))
-
-        self.assertEqual(result['status'], 'success')
-        self.assertFalse(result['should_alert'])
+    # Note: alert_mode tests removed - now using AI-based alert decisions
 
     @patch('apps.scraping.services.ScrapingService.scrape_url')
     def test_scrape_haunt_scraping_error(self, mock_scrape_url):

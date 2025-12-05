@@ -1,0 +1,1523 @@
+import apiClient from './api';
+import {
+  User,
+  Haunt,
+  Folder,
+  RSSItem,
+  Subscription,
+  UserReadState,
+  LoginRequest,
+  LoginResponse,
+  CreateHauntRequest,
+  TestScrapeRequest,
+  TestScrapeResponse,
+  UserUIPreferences,
+} from '../types';
+
+// Mock fetch globally
+global.fetch = jest.fn();
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: jest.fn((key: string) => store[key] || null),
+    setItem: jest.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: jest.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: jest.fn(() => {
+      store = {};
+    }),
+  };
+})();
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
+
+// Mock window.location
+delete (window as any).location;
+window.location = { href: '' } as any;
+
+describe('APIClient', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorageMock.clear();
+    (fetch as jest.Mock).mockClear();
+  });
+
+  describe('Authentication', () => {
+    describe('login', () => {
+      it('should login successfully and store tokens', async () => {
+        const credentials: LoginRequest = {
+          email: 'test@example.com',
+          password: 'password123',
+        };
+
+        const mockResponse: LoginResponse = {
+          access: 'access-token',
+          refresh: 'refresh-token',
+          user: {
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+          },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.login(credentials);
+
+        expect(result).toEqual(mockResponse);
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'access-token');
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'refresh-token');
+      });
+
+      it('should throw error on failed login', async () => {
+        const credentials: LoginRequest = {
+          email: 'test@example.com',
+          password: 'wrong-password',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Invalid credentials' }),
+        });
+
+        await expect(apiClient.login(credentials)).rejects.toThrow('Invalid credentials');
+      });
+    });
+
+    describe('register', () => {
+      it('should register successfully and store tokens', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        const mockResponse: LoginResponse = {
+          access: 'access-token',
+          refresh: 'refresh-token',
+          user: {
+            id: '1',
+            email: 'newuser@example.com',
+            username: 'newuser',
+          },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.register(userData);
+
+        expect(result).toEqual(mockResponse);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/register/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify(userData),
+          })
+        );
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'access-token');
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'refresh-token');
+      });
+
+      it('should throw error when passwords do not match', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'different-password',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Passwords do not match' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Passwords do not match');
+      });
+
+      it('should throw error when email already exists', async () => {
+        const userData = {
+          email: 'existing@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Email already registered' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Email already registered');
+      });
+
+      it('should throw error when username already exists', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'existinguser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Username already taken' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Username already taken');
+      });
+
+      it('should throw error when required fields are missing', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: '',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Username is required' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Username is required');
+      });
+
+      it('should throw error when password is too weak', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: '123',
+          password_confirm: '123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Password must be at least 8 characters' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Password must be at least 8 characters');
+      });
+
+      it('should throw error when email format is invalid', async () => {
+        const userData = {
+          email: 'invalid-email',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Invalid email format' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Invalid email format');
+      });
+
+      it('should handle network errors during registration', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Network error');
+      });
+
+      it('should handle server errors during registration', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: 'Internal server error' }),
+        });
+
+        await expect(apiClient.register(userData)).rejects.toThrow('Internal server error');
+      });
+
+      it('should include all user data in request body', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        const mockResponse: LoginResponse = {
+          access: 'access-token',
+          refresh: 'refresh-token',
+          user: {
+            id: '1',
+            email: 'newuser@example.com',
+            username: 'newuser',
+          },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        await apiClient.register(userData);
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/register/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+              email: 'newuser@example.com',
+              username: 'newuser',
+              password: 'password123',
+              password_confirm: 'password123',
+              first_name: 'John',
+              last_name: 'Doe',
+            }),
+          })
+        );
+      });
+
+      it('should set access token before returning response', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        const mockResponse: LoginResponse = {
+          access: 'new-access-token',
+          refresh: 'new-refresh-token',
+          user: {
+            id: '1',
+            email: 'newuser@example.com',
+            username: 'newuser',
+          },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.register(userData);
+
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'new-access-token');
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'new-refresh-token');
+        expect(result.access).toBe('new-access-token');
+        expect(result.refresh).toBe('new-refresh-token');
+      });
+
+      it('should return user data in response', async () => {
+        const userData = {
+          email: 'newuser@example.com',
+          username: 'newuser',
+          password: 'password123',
+          password_confirm: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+        };
+
+        const mockResponse: LoginResponse = {
+          access: 'access-token',
+          refresh: 'refresh-token',
+          user: {
+            id: '1',
+            email: 'newuser@example.com',
+            username: 'newuser',
+          },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.register(userData);
+
+        expect(result.user).toEqual({
+          id: '1',
+          email: 'newuser@example.com',
+          username: 'newuser',
+        });
+      });
+    });
+
+    describe('logout', () => {
+      it('should clear tokens from storage', async () => {
+        localStorageMock.setItem('accessToken', 'token');
+        localStorageMock.setItem('refreshToken', 'refresh');
+
+        await apiClient.logout();
+
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+      });
+    });
+
+    describe('refreshToken', () => {
+      it('should refresh access token', async () => {
+        localStorageMock.setItem('refreshToken', 'refresh-token');
+
+        const mockResponse = { access: 'new-access-token' };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.refreshToken();
+
+        expect(result).toEqual(mockResponse);
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'new-access-token');
+      });
+
+      it('should throw error when no refresh token available', async () => {
+        await expect(apiClient.refreshToken()).rejects.toThrow('No refresh token available');
+      });
+    });
+
+    describe('getCurrentUser', () => {
+      it('should fetch current user', async () => {
+        const mockUser: User = {
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+        };
+
+        localStorageMock.setItem('accessToken', 'token');
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockUser,
+        });
+
+        const result = await apiClient.getCurrentUser();
+
+        expect(result).toEqual(mockUser);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/user/'),
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              Authorization: 'Bearer token',
+            }),
+          })
+        );
+      });
+    });
+  });
+
+  describe('Haunts', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getHaunts', () => {
+      it('should fetch all haunts with paginated response', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Test Haunt',
+            url: 'https://example.com',
+            description: 'Test description',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: false,
+            public_slug: null,
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ results: mockHaunts }),
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual(mockHaunts);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/'),
+          expect.any(Object)
+        );
+      });
+
+      it('should fetch all haunts with non-paginated response', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Test Haunt',
+            url: 'https://example.com',
+            description: 'Test description',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: false,
+            public_slug: null,
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunts,
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual(mockHaunts);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/'),
+          expect.any(Object)
+        );
+      });
+
+      it('should handle empty paginated response', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ results: [] }),
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual([]);
+        expect(Array.isArray(result)).toBe(true);
+      });
+
+      it('should handle empty non-paginated response', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => [],
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual([]);
+        expect(Array.isArray(result)).toBe(true);
+      });
+
+      it('should handle paginated response with multiple haunts', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Test Haunt 1',
+            url: 'https://example1.com',
+            description: 'Test description 1',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: false,
+            public_slug: null,
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+          {
+            id: '2',
+            owner: 'user1',
+            name: 'Test Haunt 2',
+            url: 'https://example2.com',
+            description: 'Test description 2',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'on_change',
+            scrape_interval: 1800,
+            is_public: true,
+            public_slug: 'test-haunt-2',
+            folder: 'folder1',
+            created_at: '2024-01-02T00:00:00Z',
+            updated_at: '2024-01-02T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ results: mockHaunts }),
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual(mockHaunts);
+        expect(result.length).toBe(2);
+      });
+
+      it('should correctly identify paginated response with results key', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Test Haunt',
+            url: 'https://example.com',
+            description: 'Test description',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: false,
+            public_slug: null,
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        // Mock response with pagination metadata
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            count: 1,
+            next: null,
+            previous: null,
+            results: mockHaunts,
+          }),
+        });
+
+        const result = await apiClient.getHaunts();
+
+        expect(result).toEqual(mockHaunts);
+        expect(result).not.toHaveProperty('count');
+        expect(result).not.toHaveProperty('next');
+      });
+    });
+
+    describe('getHaunt', () => {
+      it('should fetch a single haunt by id', async () => {
+        const mockHaunt: Haunt = {
+          id: '1',
+          owner: 'user1',
+          name: 'Test Haunt',
+          url: 'https://example.com',
+          description: 'Test description',
+          config: { selectors: {}, normalization: {}, truthy_values: {} },
+          current_state: {},
+          last_alert_state: null,
+          alert_mode: 'once',
+          scrape_interval: 3600,
+          is_public: false,
+          public_slug: null,
+          folder: null,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunt,
+        });
+
+        const result = await apiClient.getHaunt('1');
+
+        expect(result).toEqual(mockHaunt);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/1/'),
+          expect.any(Object)
+        );
+      });
+    });
+
+    describe('createHaunt', () => {
+      it('should create a new haunt', async () => {
+        const createRequest: CreateHauntRequest = {
+          name: 'New Haunt',
+          url: 'https://example.com',
+          description: 'Monitor price changes',
+          scrape_interval: 3600,
+          alert_mode: 'on_change',
+          is_public: false,
+        };
+
+        const mockHaunt: Haunt = {
+          id: '2',
+          owner: 'user1',
+          ...createRequest,
+          config: { selectors: {}, normalization: {}, truthy_values: {} },
+          current_state: {},
+          last_alert_state: null,
+          public_slug: null,
+          folder: null,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunt,
+        });
+
+        const result = await apiClient.createHaunt(createRequest);
+
+        expect(result).toEqual(mockHaunt);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify(createRequest),
+          })
+        );
+      });
+    });
+
+    describe('updateHaunt', () => {
+      it('should update an existing haunt', async () => {
+        const updateData = { name: 'Updated Name' };
+        const mockHaunt: Haunt = {
+          id: '1',
+          owner: 'user1',
+          name: 'Updated Name',
+          url: 'https://example.com',
+          description: 'Test',
+          config: { selectors: {}, normalization: {}, truthy_values: {} },
+          current_state: {},
+          last_alert_state: null,
+          alert_mode: 'once',
+          scrape_interval: 3600,
+          is_public: false,
+          public_slug: null,
+          folder: null,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunt,
+        });
+
+        const result = await apiClient.updateHaunt('1', updateData);
+
+        expect(result).toEqual(mockHaunt);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/1/'),
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify(updateData),
+          })
+        );
+      });
+    });
+
+    describe('deleteHaunt', () => {
+      it('should delete a haunt', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+        await apiClient.deleteHaunt('1');
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/1/'),
+          expect.objectContaining({
+            method: 'DELETE',
+          })
+        );
+      });
+    });
+
+    describe('makeHauntPublic', () => {
+      it('should make a haunt public', async () => {
+        const mockHaunt: Haunt = {
+          id: '1',
+          owner: 'user1',
+          name: 'Test Haunt',
+          url: 'https://example.com',
+          description: 'Test',
+          config: { selectors: {}, normalization: {}, truthy_values: {} },
+          current_state: {},
+          last_alert_state: null,
+          alert_mode: 'once',
+          scrape_interval: 3600,
+          is_public: true,
+          public_slug: 'test-haunt',
+          folder: null,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunt,
+        });
+
+        const result = await apiClient.makeHauntPublic('1');
+
+        expect(result.is_public).toBe(true);
+        expect(result.public_slug).toBe('test-haunt');
+      });
+    });
+
+    describe('testScrape', () => {
+      it('should test scrape configuration', async () => {
+        const testRequest: TestScrapeRequest = {
+          url: 'https://example.com',
+          description: 'Monitor price',
+        };
+
+        const mockResponse: TestScrapeResponse = {
+          config: {
+            selectors: { price: '.price' },
+            normalization: {},
+            truthy_values: {},
+          },
+          extracted_data: { price: '$99.99' },
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await apiClient.testScrape(testRequest);
+
+        expect(result).toEqual(mockResponse);
+      });
+    });
+
+    describe('refreshHaunt', () => {
+      it('should trigger manual refresh', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+        await apiClient.refreshHaunt('1');
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/haunts/1/refresh/'),
+          expect.objectContaining({
+            method: 'POST',
+          })
+        );
+      });
+    });
+
+    describe('getPublicHaunts', () => {
+      it('should fetch public haunts with paginated response', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Public Haunt',
+            url: 'https://example.com',
+            description: 'Test',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: true,
+            public_slug: 'public-haunt',
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ results: mockHaunts }),
+        });
+
+        const result = await apiClient.getPublicHaunts();
+
+        expect(result).toEqual(mockHaunts);
+      });
+
+      it('should handle non-paginated response', async () => {
+        const mockHaunts: Haunt[] = [
+          {
+            id: '1',
+            owner: 'user1',
+            name: 'Public Haunt',
+            url: 'https://example.com',
+            description: 'Test',
+            config: { selectors: {}, normalization: {}, truthy_values: {} },
+            current_state: {},
+            last_alert_state: null,
+            alert_mode: 'once',
+            scrape_interval: 3600,
+            is_public: true,
+            public_slug: 'public-haunt',
+            folder: null,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockHaunts,
+        });
+
+        const result = await apiClient.getPublicHaunts();
+
+        expect(result).toEqual(mockHaunts);
+      });
+    });
+  });
+
+  describe('Folders', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getFolders', () => {
+      it('should fetch all folders', async () => {
+        const mockFolders: Folder[] = [
+          {
+            id: '1',
+            name: 'Work',
+            parent: null,
+            user: 'user1',
+            created_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFolders,
+        });
+
+        const result = await apiClient.getFolders();
+
+        expect(result).toEqual(mockFolders);
+      });
+    });
+
+    describe('createFolder', () => {
+      it('should create a new folder', async () => {
+        const mockFolder: Folder = {
+          id: '2',
+          name: 'Personal',
+          parent: null,
+          user: 'user1',
+          created_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFolder,
+        });
+
+        const result = await apiClient.createFolder('Personal');
+
+        expect(result).toEqual(mockFolder);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/folders/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ name: 'Personal', parent: null }),
+          })
+        );
+      });
+
+      it('should create a nested folder', async () => {
+        const mockFolder: Folder = {
+          id: '3',
+          name: 'Subfolder',
+          parent: '1',
+          user: 'user1',
+          created_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFolder,
+        });
+
+        const result = await apiClient.createFolder('Subfolder', '1');
+
+        expect(result.parent).toBe('1');
+      });
+    });
+
+    describe('updateFolder', () => {
+      it('should update a folder', async () => {
+        const mockFolder: Folder = {
+          id: '1',
+          name: 'Updated Name',
+          parent: null,
+          user: 'user1',
+          created_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockFolder,
+        });
+
+        const result = await apiClient.updateFolder('1', { name: 'Updated Name' });
+
+        expect(result.name).toBe('Updated Name');
+      });
+    });
+
+    describe('deleteFolder', () => {
+      it('should delete a folder', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+        await apiClient.deleteFolder('1');
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/folders/1/'),
+          expect.objectContaining({
+            method: 'DELETE',
+          })
+        );
+      });
+    });
+  });
+
+  describe('RSS Items', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getRSSItems', () => {
+      it('should fetch all RSS items', async () => {
+        const mockItems: RSSItem[] = [
+          {
+            id: '1',
+            haunt: 'haunt1',
+            title: 'Change Detected',
+            description: 'Price changed',
+            link: 'https://example.com',
+            pub_date: '2024-01-01T00:00:00Z',
+            guid: 'guid1',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockItems,
+        });
+
+        const result = await apiClient.getRSSItems();
+
+        expect(result).toEqual(mockItems);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/rss/items/'),
+          expect.any(Object)
+        );
+      });
+
+      it('should fetch RSS items for specific haunt', async () => {
+        const mockItems: RSSItem[] = [
+          {
+            id: '1',
+            haunt: 'haunt1',
+            title: 'Change Detected',
+            description: 'Price changed',
+            link: 'https://example.com',
+            pub_date: '2024-01-01T00:00:00Z',
+            guid: 'guid1',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockItems,
+        });
+
+        const result = await apiClient.getRSSItems('haunt1');
+
+        expect(result).toEqual(mockItems);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/rss/items/?haunt=haunt1'),
+          expect.any(Object)
+        );
+      });
+    });
+
+    describe('getRSSItem', () => {
+      it('should fetch a single RSS item', async () => {
+        const mockItem: RSSItem = {
+          id: '1',
+          haunt: 'haunt1',
+          title: 'Change Detected',
+          description: 'Price changed',
+          link: 'https://example.com',
+          pub_date: '2024-01-01T00:00:00Z',
+          guid: 'guid1',
+          ai_summary: 'AI generated summary',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockItem,
+        });
+
+        const result = await apiClient.getRSSItem('1');
+
+        expect(result).toEqual(mockItem);
+      });
+    });
+  });
+
+  describe('Subscriptions', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getSubscriptions', () => {
+      it('should fetch all subscriptions', async () => {
+        const mockSubscriptions: Subscription[] = [
+          {
+            id: '1',
+            user: 'user1',
+            haunt: 'haunt1',
+            subscribed_at: '2024-01-01T00:00:00Z',
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSubscriptions,
+        });
+
+        const result = await apiClient.getSubscriptions();
+
+        expect(result).toEqual(mockSubscriptions);
+      });
+    });
+
+    describe('subscribe', () => {
+      it('should subscribe to a haunt', async () => {
+        const mockSubscription: Subscription = {
+          id: '2',
+          user: 'user1',
+          haunt: 'haunt2',
+          subscribed_at: '2024-01-01T00:00:00Z',
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockSubscription,
+        });
+
+        const result = await apiClient.subscribe('haunt2');
+
+        expect(result).toEqual(mockSubscription);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/subscriptions/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ haunt: 'haunt2' }),
+          })
+        );
+      });
+    });
+
+    describe('unsubscribe', () => {
+      it('should unsubscribe from a haunt', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+        await apiClient.unsubscribe('1');
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/subscriptions/1/'),
+          expect.objectContaining({
+            method: 'DELETE',
+          })
+        );
+      });
+    });
+  });
+
+  describe('Read States', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getReadStates', () => {
+      it('should fetch all read states', async () => {
+        const mockStates: UserReadState[] = [
+          {
+            id: '1',
+            user: 'user1',
+            rss_item: 'item1',
+            is_read: true,
+            is_starred: false,
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockStates,
+        });
+
+        const result = await apiClient.getReadStates();
+
+        expect(result).toEqual(mockStates);
+      });
+
+      it('should fetch read states for specific haunt', async () => {
+        const mockStates: UserReadState[] = [
+          {
+            id: '1',
+            user: 'user1',
+            rss_item: 'item1',
+            is_read: true,
+            is_starred: false,
+          },
+        ];
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockStates,
+        });
+
+        const result = await apiClient.getReadStates('haunt1');
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/read-states/?haunt=haunt1'),
+          expect.any(Object)
+        );
+      });
+    });
+
+    describe('markAsRead', () => {
+      it('should mark item as read', async () => {
+        const mockState: UserReadState = {
+          id: '1',
+          user: 'user1',
+          rss_item: 'item1',
+          is_read: true,
+          is_starred: false,
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockState,
+        });
+
+        const result = await apiClient.markAsRead('item1');
+
+        expect(result.is_read).toBe(true);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/read-states/item1/mark-read/'),
+          expect.objectContaining({
+            method: 'POST',
+          })
+        );
+      });
+    });
+
+    describe('markAsUnread', () => {
+      it('should mark item as unread', async () => {
+        const mockState: UserReadState = {
+          id: '1',
+          user: 'user1',
+          rss_item: 'item1',
+          is_read: false,
+          is_starred: false,
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockState,
+        });
+
+        const result = await apiClient.markAsUnread('item1');
+
+        expect(result.is_read).toBe(false);
+      });
+    });
+
+    describe('toggleStar', () => {
+      it('should toggle star status', async () => {
+        const mockState: UserReadState = {
+          id: '1',
+          user: 'user1',
+          rss_item: 'item1',
+          is_read: true,
+          is_starred: true,
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockState,
+        });
+
+        const result = await apiClient.toggleStar('item1');
+
+        expect(result.is_starred).toBe(true);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/read-states/item1/toggle-star/'),
+          expect.objectContaining({
+            method: 'POST',
+          })
+        );
+      });
+    });
+
+    describe('bulkMarkAsRead', () => {
+      it('should mark multiple items as read', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+        await apiClient.bulkMarkAsRead(['item1', 'item2', 'item3']);
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/read-states/bulk-mark-read/'),
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ item_ids: ['item1', 'item2', 'item3'] }),
+          })
+        );
+      });
+    });
+  });
+
+  describe('User Preferences', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('getUserPreferences', () => {
+      it('should fetch user preferences', async () => {
+        const mockPreferences: UserUIPreferences = {
+          left_panel_width: 280,
+          middle_panel_width: 400,
+          keyboard_shortcuts_enabled: true,
+          auto_mark_read_on_scroll: false,
+          collapsed_folders: ['folder1', 'folder2'],
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockPreferences,
+        });
+
+        const result = await apiClient.getUserPreferences();
+
+        expect(result).toEqual(mockPreferences);
+      });
+    });
+
+    describe('updateUserPreferences', () => {
+      it('should update user preferences', async () => {
+        const updateData = {
+          keyboard_shortcuts_enabled: false,
+          collapsed_folders: ['folder1'],
+        };
+
+        const mockPreferences: UserUIPreferences = {
+          left_panel_width: 280,
+          middle_panel_width: 400,
+          keyboard_shortcuts_enabled: false,
+          auto_mark_read_on_scroll: false,
+          collapsed_folders: ['folder1'],
+        };
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockPreferences,
+        });
+
+        const result = await apiClient.updateUserPreferences(updateData);
+
+        expect(result.keyboard_shortcuts_enabled).toBe(false);
+        expect(result.collapsed_folders).toEqual(['folder1']);
+        expect(fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/user/preferences/'),
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify(updateData),
+          })
+        );
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    beforeEach(() => {
+      localStorageMock.setItem('accessToken', 'token');
+    });
+
+    describe('401 Unauthorized', () => {
+      it('should clear token and redirect on 401 error', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Token expired' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+        expect(window.location.href).toBe('/login');
+      });
+    });
+
+    describe('Network Errors', () => {
+      it('should handle network errors', async () => {
+        (fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Network error');
+      });
+    });
+
+    describe('Server Errors', () => {
+      it('should handle 500 errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: 'Internal server error' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Internal server error');
+      });
+
+      it('should handle errors without detail field', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({}),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('HTTP 400');
+      });
+
+      it('should handle malformed JSON responses', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          json: async () => {
+            throw new Error('Invalid JSON');
+          },
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Request failed');
+      });
+    });
+  });
+
+  describe('Token Management', () => {
+    describe('setAccessToken', () => {
+      it('should store token in localStorage', () => {
+        apiClient.setAccessToken('new-token');
+
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'new-token');
+      });
+
+      it('should remove token from localStorage when null', () => {
+        apiClient.setAccessToken(null);
+
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+      });
+    });
+
+    describe('Token Synchronization', () => {
+      it('should sync token from localStorage on each request', async () => {
+        localStorageMock.setItem('accessToken', 'stored-token');
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => [],
+        });
+
+        await apiClient.getHaunts();
+
+        expect(fetch).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              Authorization: 'Bearer stored-token',
+            }),
+          })
+        );
+      });
+
+      it('should not include Authorization header when no token', async () => {
+        localStorageMock.clear();
+
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => [],
+        });
+
+        await apiClient.getHaunts();
+
+        const callArgs = (fetch as jest.Mock).mock.calls[0];
+        const headers = callArgs[1].headers;
+        expect(headers.Authorization).toBeUndefined();
+      });
+    });
+  });
+});

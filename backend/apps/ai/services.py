@@ -1,12 +1,20 @@
 """
-AI service business logic for configuration generation and summaries
+AI service business logic for configuration generation and summaries using Google Gemini API.
+
+This service uses Google AI Studio API (Gemini) for:
+- Converting natural language descriptions to CSS selectors and monitoring configurations
+- Generating human-readable summaries of detected changes
+
+Configuration:
+- LLM_API_KEY: Google AI Studio API key (get from https://aistudio.google.com/app/apikey)
+- Model: gemini-2.5-flash (fast, cost-effective model for structured outputs)
 """
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from django.conf import settings
-from openai import OpenAI
-from rest_framework import serializers
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from .config_schema import ConfigurationValidator, ConfigurationStorage, HauntConfig
 
 logger = logging.getLogger(__name__)
@@ -18,18 +26,30 @@ class AIConfigurationError(Exception):
 
 
 class AIConfigService:
-    """Service for AI-powered configuration generation and change summaries"""
+    """
+    Service for AI-powered configuration generation and change summaries using Google Gemini.
+    
+    Requires LLM_API_KEY environment variable set to a Google AI Studio API key.
+    Get your API key from: https://aistudio.google.com/app/apikey
+    """
     
     def __init__(self):
         if not settings.LLM_API_KEY:
             logger.warning("LLM_API_KEY not configured - AI features will be disabled")
-            self.client = None
+            self.model = None
         else:
-            self.client = OpenAI(api_key=settings.LLM_API_KEY)
+            try:
+                genai.configure(api_key=settings.LLM_API_KEY)
+                # Use Gemini 2.0 Flash - latest stable model
+                self.model = genai.GenerativeModel('models/gemini-2.0-flash')
+                logger.info("Google Gemini AI service initialized successfully")
+            except Exception as e:
+                logger.error("Failed to initialize Google Gemini: %s", str(e))
+                self.model = None
     
     def is_available(self) -> bool:
         """Check if AI service is available"""
-        return self.client is not None
+        return self.model is not None
     
     def generate_config(self, url: str, description: str) -> Dict[str, Any]:
         """
@@ -49,19 +69,32 @@ class AIConfigService:
             raise AIConfigurationError("AI service is not available - LLM_API_KEY not configured")
         
         try:
-            prompt = self._build_config_prompt(url, description)
+            # Build the full prompt combining system and user prompts for Gemini
+            full_prompt = f"{self._get_system_prompt()}\n\n{self._build_config_prompt(url, description)}"
             
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,  # Low temperature for consistent results
-                max_tokens=1000
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,  # Slightly higher to avoid recitation
+                    max_output_tokens=1000,
+                ),
+                safety_settings={
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                }
             )
             
-            config_text = response.choices[0].message.content.strip()
+            # Check if response was blocked
+            if not response.candidates or not response.candidates[0].content.parts:
+                finish_reason = response.candidates[0].finish_reason if response.candidates else "UNKNOWN"
+                raise AIConfigurationError(
+                    f"AI response was blocked or empty (finish_reason: {finish_reason}). "
+                    "Try rephrasing your description."
+                )
+            
+            config_text = response.text.strip()
             
             # Extract JSON from response (handle potential markdown formatting)
             if "```json" in config_text:
@@ -105,19 +138,18 @@ class AIConfigService:
             return self._generate_fallback_summary(old_state, new_state)
         
         try:
-            prompt = self._build_summary_prompt(old_state, new_state)
+            system_prompt = "You are a helpful assistant that creates concise, human-readable summaries of website changes. Keep summaries to 1-2 sentences maximum."
+            full_prompt = f"{system_prompt}\n\n{self._build_summary_prompt(old_state, new_state)}"
             
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that creates concise, human-readable summaries of website changes. Keep summaries to 1-2 sentences maximum."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=150
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                    max_output_tokens=150,
+                )
             )
             
-            summary = response.choices[0].message.content.strip()
+            summary = response.text.strip()
             logger.info("Successfully generated AI summary for state change")
             return summary
             
@@ -128,50 +160,29 @@ class AIConfigService:
     
     def _get_system_prompt(self) -> str:
         """Get the system prompt for configuration generation"""
-        return """You are an expert web scraping assistant. Your job is to analyze a website URL and natural language description to generate a JSON configuration for monitoring specific elements.
-
-The configuration should include:
-1. "selectors": CSS selectors or XPath expressions to extract data
-2. "normalization": Rules for cleaning/normalizing extracted values
-3. "truthy_values": Values that indicate "interesting" or "open" states
-
-Return ONLY valid JSON with no additional text or markdown formatting.
-
-Example output:
-{
-  "selectors": {
-    "status": "css:.status-indicator",
-    "deadline": "css:.deadline-date"
-  },
-  "normalization": {
-    "status": {
-      "type": "text",
-      "transform": "lowercase",
-      "strip": true
-    },
-    "deadline": {
-      "type": "date",
-      "format": "%Y-%m-%d"
-    }
-  },
-  "truthy_values": {
-    "status": ["open", "accepting", "available", "active"]
-  }
-}"""
+        return """Create a monitoring config as JSON."""
     
     def _build_config_prompt(self, url: str, description: str) -> str:
         """Build the prompt for configuration generation"""
-        return f"""URL: {url}
+        # Use a very simple, direct prompt to avoid recitation filter
+        return f"""Task: Monitor "{description}" on {url}
 
-Description: {description}
+Output JSON with:
+- selectors: CSS selectors for elements (format: "css:.selector" or just ".selector")
+- normalization: text cleaning rules
+- truthy_values: positive state values
 
-Please generate a monitoring configuration that will track the elements described. Focus on:
-- Selecting the most reliable CSS selectors for the described elements
-- Normalizing text values to be consistent (lowercase, trimmed)
-- Identifying which values indicate "open", "available", or "interesting" states
-- Keeping the configuration simple and focused on the key elements mentioned
+IMPORTANT RULES:
+1. normalization "type" must be one of: "text", "number", "date", "boolean"
+2. normalization "transform" (optional) must be one of: "lowercase", "uppercase", "strip"
+3. Do NOT use types like "attribute" or "list"
+4. Do NOT use transforms like "remove_non_numeric", "replace", "int"
+5. For extracting attributes, use regex_pattern in normalization instead
 
-Generate the JSON configuration now:"""
+Example structure:
+{{"selectors": {{"status": ".status-text"}}, "normalization": {{"status": {{"type": "text", "transform": "lowercase", "strip": true}}}}, "truthy_values": {{"status": ["open", "active"]}}}}
+
+Your JSON:"""
     
     def _build_summary_prompt(self, old_state: Dict[str, Any], new_state: Dict[str, Any]) -> str:
         """Build the prompt for summary generation"""
@@ -190,6 +201,134 @@ Generate the JSON configuration now:"""
 
 Please provide a concise, human-readable summary of what changed. Focus on the most important changes and use natural language. Keep it to 1-2 sentences maximum."""
     
+    def evaluate_alert_decision(
+        self,
+        user_description: str,
+        old_state: Dict[str, Any],
+        new_state: Dict[str, Any],
+        changes: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Use AI to evaluate if changes warrant an alert based on user intent.
+        This is the core of AI-powered change detection.
+        
+        Args:
+            user_description: Original natural language description from user
+            old_state: Previous scraped state
+            new_state: Current scraped state
+            changes: Detected changes dictionary
+            
+        Returns:
+            Dictionary with:
+                - should_alert (bool): Whether to alert the user
+                - reason (str): Explanation of the decision
+                - confidence (float): Confidence score 0.0-1.0
+                - summary (str): Human-readable summary of changes
+        """
+        if not self.is_available():
+            # Fallback to simple rule-based detection
+            return {
+                "should_alert": len(changes) > 0,
+                "reason": "AI unavailable, alerting on any change",
+                "confidence": 0.5,
+                "summary": self._generate_fallback_summary(old_state, new_state)
+            }
+        
+        try:
+            prompt = self._build_alert_evaluation_prompt(
+                user_description,
+                old_state,
+                new_state,
+                changes
+            )
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,  # Low temperature for consistent decisions
+                    max_output_tokens=300,
+                ),
+                safety_settings={
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                }
+            )
+            
+            # Extract JSON from response
+            result_text = response.text.strip()
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0].strip()
+            
+            result = json.loads(result_text)
+            
+            # Validate response structure
+            required_keys = ["should_alert", "reason", "confidence", "summary"]
+            if not all(key in result for key in required_keys):
+                raise ValueError(f"AI response missing required keys: {required_keys}")
+            
+            logger.info(
+                f"AI alert decision: should_alert={result['should_alert']}, "
+                f"confidence={result['confidence']}, reason={result['reason']}"
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI alert evaluation failed: {e}")
+            # Fallback to simple detection
+            return {
+                "should_alert": len(changes) > 0,
+                "reason": f"AI evaluation failed: {str(e)}",
+                "confidence": 0.5,
+                "summary": self._generate_fallback_summary(old_state, new_state)
+            }
+    
+    def _build_alert_evaluation_prompt(
+        self,
+        user_description: str,
+        old_state: Dict[str, Any],
+        new_state: Dict[str, Any],
+        changes: Dict[str, Any]
+    ) -> str:
+        """Build prompt for AI alert evaluation"""
+        changes_text = json.dumps(changes, indent=2)
+        old_state_text = json.dumps(old_state, indent=2)
+        new_state_text = json.dumps(new_state, indent=2)
+        
+        return f"""You are evaluating whether a user should be alerted about website changes.
+
+USER'S MONITORING INTENT:
+"{user_description}"
+
+PREVIOUS STATE:
+{old_state_text}
+
+CURRENT STATE:
+{new_state_text}
+
+DETECTED CHANGES:
+{changes_text}
+
+TASK:
+Determine if these changes match what the user wants to monitor. Consider:
+1. Does the change align with the user's stated intent?
+2. Is this a meaningful change or just noise?
+3. Would the user want to be notified about this?
+
+Respond with JSON:
+{{
+  "should_alert": true or false,
+  "reason": "brief explanation of why you made this decision",
+  "confidence": 0.0 to 1.0 (how confident you are in this decision),
+  "summary": "1-2 sentence human-readable summary of what changed"
+}}
+
+Your JSON response:"""
+    
     def _generate_fallback_summary(self, old_state: Dict[str, Any], new_state: Dict[str, Any]) -> str:
         """Generate a simple fallback summary when AI is not available"""
         changes = []
@@ -204,7 +343,7 @@ Please provide a concise, human-readable summary of what changed. Focus on the m
         elif len(changes) == 1:
             return changes[0]
         else:
-            return f"{len(changes)} fields changed: {', '.join(changes[:2])}{'...' if len(changes) > 2 else ''}"
+            return f"{len(changes)} changes detected: " + "; ".join(changes[:3])
     
     def parse_config(self, config_dict: Dict[str, Any]) -> 'HauntConfig':
         """

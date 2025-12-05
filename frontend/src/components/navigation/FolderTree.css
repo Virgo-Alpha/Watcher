@@ -11,25 +11,21 @@
 }
 
 .unfolderd-section {
-  margin-top: 8px;
-  transition: background-color 0.2s;
+  margin-top: var(--spacing-lg);
 }
 
 .unfolderd-section.drop-target {
-  background-color: #e3f2fd;
+  background-color: var(--color-hover-bg);
 }
 
 .folder-header-simple {
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  padding: var(--spacing-md) 16px;
+  font-weight: normal;
+  font-size: var(--font-size-nav);
+  color: var(--color-text-secondary);
 }
 
 .drop-target {
-  background-color: #e3f2fd;
-  border: 2px dashed #2196f3;
-  border-radius: 4px;
+  background-color: var(--color-hover-bg);
+  border: 1px dashed var(--color-border);
 }

@@ -72,11 +72,27 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             "notifications_enabled": true
         }
         """
+        logger.info(
+            "Subscription create request | User: %s | Content-Type: %s",
+            request.user.id if request.user.is_authenticated else 'Anonymous',
+            request.content_type
+        )
+        
         serializer = SubscriptionCreateSerializer(
             data=request.data,
             context={'request': request}
         )
-        serializer.is_valid(raise_exception=True)
+        
+        if not serializer.is_valid():
+            logger.error(
+                "Subscription validation failed | Errors: %s | Data: %s",
+                serializer.errors,
+                request.data
+            )
+            serializer.is_valid(raise_exception=True)
+        
+        # Validation passed
+        logger.info("Subscription data validated: %s", serializer.validated_data)
 
         haunt_id = serializer.validated_data['haunt_id']
         notifications_enabled = serializer.validated_data.get('notifications_enabled', True)
