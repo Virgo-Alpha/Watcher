@@ -43,6 +43,8 @@ A site change monitoring application that "haunts" websites to detect user-defin
 
 Watcher monitors websites for changes you care about—like a friendly ghost watching over pages 24/7. When something meaningful changes, you get notified via email or can check updates in the familiar Google Reader-inspired interface.
 
+https://github.com/user-attachments/assets/d7660125-0035-4a63-8766-f63b7dcbe5f4
+
 ### What Does "Haunting" Mean?
 
 When you **haunt a website**, Watcher becomes your invisible observer—silently watching a page for the changes you care about. Like a friendly ghost, it monitors 24/7 without being seen, then alerts you the moment something important happens.
