@@ -11,22 +11,22 @@ import './App.css';
 function App() {
   return (
     <AuthErrorBoundary>
-      <div className="App">
-        <Routes>
-          <Route path="/welcome" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route
-            path="/"
-            element={
+      <Routes>
+        <Route path="/welcome" element={<div className="App"><Landing /></div>} />
+        <Route path="/login" element={<div className="App"><Login /></div>} />
+        <Route path="/signup" element={<div className="App"><Signup /></div>} />
+        <Route
+          path="/"
+          element={
+            <div className="App main-app">
               <ProtectedRoute>
                 <MainApp />
               </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </div>
+            </div>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </AuthErrorBoundary>
   );
 }

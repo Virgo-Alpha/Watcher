@@ -1,4 +1,8 @@
 .App {
+  min-height: 100vh;
+}
+
+.App.main-app {
   height: 100vh;
   overflow: hidden;
 }

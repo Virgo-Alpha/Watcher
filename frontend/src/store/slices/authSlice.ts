@@ -110,6 +110,34 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
     });
 
+    // Register
+    builder.addCase(register.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(register.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.accessToken = action.payload.access;
+      state.refreshToken = action.payload.refresh;
+      state.isAuthenticated = true;
+      state.error = null;
+      // Store tokens in localStorage
+      localStorage.setItem('accessToken', action.payload.access);
+      localStorage.setItem('refreshToken', action.payload.refresh);
+      // Update apiClient token
+      apiClient.setAccessToken(action.payload.access);
+      
+      console.log('[authSlice] Registration successful!');
+      console.log('[authSlice] Token saved to localStorage:', !!localStorage.getItem('accessToken'));
+      console.log('[authSlice] User:', action.payload.user.email);
+    });
+    builder.addCase(register.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+      state.isAuthenticated = false;
+    });
+
     // Logout
     builder.addCase(logout.fulfilled, (state) => {
       state.user = null;

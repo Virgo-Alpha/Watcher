@@ -3,6 +3,7 @@ import { FolderTree as FolderTreeType, Haunt } from '../../types';
 import FolderItem from './FolderItem';
 import HauntItem from './HauntItem';
 import ContextMenu from './ContextMenu';
+import EditHauntModal from '../modals/EditHauntModal';
 import './FolderTree.css';
 
 interface FolderTreeProps {
@@ -16,6 +17,8 @@ interface FolderTreeProps {
   onFolderDelete: (folderId: string) => void;
   onHauntMove: (hauntId: string, folderId: string | null) => void;
   onHauntDelete: (hauntId: string) => void;
+  onHauntEdit: (hauntId: string, data: Partial<Haunt>) => void;
+  onHauntRefresh: (hauntId: string) => void;
 }
 
 interface ContextMenuState {
@@ -38,9 +41,12 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   onFolderDelete,
   onHauntMove,
   onHauntDelete,
+  onHauntEdit,
+  onHauntRefresh,
 }) => {
   const [draggedHaunt, setDraggedHaunt] = useState<Haunt | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [editingHaunt, setEditingHaunt] = useState<Haunt | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
     x: 0,
@@ -106,6 +112,27 @@ const FolderTree: React.FC<FolderTreeProps> = ({
     });
   };
 
+  const findHauntById = (id: string): Haunt | null => {
+    // Search in folders
+    for (const folder of folders) {
+      const haunt = findHauntInFolder(folder, id);
+      if (haunt) return haunt;
+    }
+    // Search in unfolderd haunts
+    return unfolderedHaunts.find(h => h.id === id) || null;
+  };
+
+  const findHauntInFolder = (folder: FolderTreeType, id: string): Haunt | null => {
+    const haunt = folder.haunts.find(h => h.id === id);
+    if (haunt) return haunt;
+    
+    for (const child of folder.children) {
+      const found = findHauntInFolder(child, id);
+      if (found) return found;
+    }
+    return null;
+  };
+
   const handleContextMenuAction = (action: string) => {
     if (!contextMenu.targetId) return;
 
@@ -116,6 +143,19 @@ const FolderTree: React.FC<FolderTreeProps> = ({
           if (newName && newName.trim()) {
             onFolderRename(contextMenu.targetId, newName.trim());
           }
+        }
+        break;
+      case 'edit':
+        if (contextMenu.type === 'haunt') {
+          const haunt = findHauntById(contextMenu.targetId);
+          if (haunt) {
+            setEditingHaunt(haunt);
+          }
+        }
+        break;
+      case 'refresh':
+        if (contextMenu.type === 'haunt') {
+          onHauntRefresh(contextMenu.targetId);
         }
         break;
       case 'delete':
@@ -223,6 +263,15 @@ const FolderTree: React.FC<FolderTreeProps> = ({
           type={contextMenu.type!}
           onAction={handleContextMenuAction}
           onClose={handleCloseContextMenu}
+        />
+      )}
+
+      {/* Edit Haunt Modal */}
+      {editingHaunt && (
+        <EditHauntModal
+          haunt={editingHaunt}
+          onSave={onHauntEdit}
+          onClose={() => setEditingHaunt(null)}
         />
       )}
     </div>

@@ -10,6 +10,7 @@ import {
   deleteFolder,
   updateHaunt,
   deleteHaunt,
+  refreshHaunt,
 } from '../../store/slices/hauntsSlice';
 import { fetchRSSItems, fetchReadStates } from '../../store/slices/rssItemsSlice';
 import { setShowSetupWizard, toggleFolder, collapseFolder } from '../../store/slices/uiSlice';
@@ -98,6 +99,14 @@ const NavigationPanel: React.FC = () => {
     dispatch(deleteHaunt(hauntId));
   };
 
+  const handleHauntEdit = (hauntId: string, data: Partial<Haunt>) => {
+    dispatch(updateHaunt({ id: hauntId, data }));
+  };
+
+  const handleHauntRefresh = (hauntId: string) => {
+    dispatch(refreshHaunt(hauntId));
+  };
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
@@ -157,6 +166,8 @@ const NavigationPanel: React.FC = () => {
             onFolderDelete={handleFolderDelete}
             onHauntMove={handleHauntMove}
             onHauntDelete={handleHauntDelete}
+            onHauntEdit={handleHauntEdit}
+            onHauntRefresh={handleHauntRefresh}
           />
         )}
       </div>

@@ -35,7 +35,8 @@ const Signup: React.FC = () => {
       return;
     }
 
-    await dispatch(register({ 
+    console.log('[Signup] Submitting registration...');
+    const result = await dispatch(register({ 
       email, 
       username, 
       password, 
@@ -43,6 +44,13 @@ const Signup: React.FC = () => {
       first_name: firstName,
       last_name: lastName
     }));
+    
+    console.log('[Signup] Registration result:', result);
+    
+    // The useEffect will handle navigation when isAuthenticated becomes true
+    if (!register.fulfilled.match(result)) {
+      console.error('[Signup] Registration failed:', result);
+    }
   };
 
   return (

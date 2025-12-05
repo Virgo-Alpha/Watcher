@@ -18,21 +18,19 @@ import {
 global.fetch = jest.fn();
 
 // Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: jest.fn((key: string) => store[key] || null),
-    setItem: jest.fn((key: string, value: string) => {
-      store[key] = value;
-    }),
-    removeItem: jest.fn((key: string) => {
-      delete store[key];
-    }),
-    clear: jest.fn(() => {
-      store = {};
-    }),
-  };
-})();
+let localStorageStore: Record<string, string> = {};
+const localStorageMock = {
+  getItem: jest.fn((key: string) => localStorageStore[key] || null),
+  setItem: jest.fn((key: string, value: string) => {
+    localStorageStore[key] = value;
+  }),
+  removeItem: jest.fn((key: string) => {
+    delete localStorageStore[key];
+  }),
+  clear: jest.fn(() => {
+    localStorageStore = {};
+  }),
+};
 
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
@@ -44,8 +42,24 @@ window.location = { href: '' } as any;
 
 describe('APIClient', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    localStorageMock.clear();
+    // Clear the store
+    localStorageStore = {};
+    // Clear mock call history but restore implementations
+    localStorageMock.getItem.mockClear();
+    localStorageMock.setItem.mockClear();
+    localStorageMock.removeItem.mockClear();
+    localStorageMock.clear.mockClear();
+    // Restore implementations
+    localStorageMock.getItem.mockImplementation((key: string) => localStorageStore[key] || null);
+    localStorageMock.setItem.mockImplementation((key: string, value: string) => {
+      localStorageStore[key] = value;
+    });
+    localStorageMock.removeItem.mockImplementation((key: string) => {
+      delete localStorageStore[key];
+    });
+    localStorageMock.clear.mockImplementation(() => {
+      localStorageStore = {};
+    });
     (fetch as jest.Mock).mockClear();
   });
 
@@ -447,7 +461,7 @@ describe('APIClient', () => {
 
         expect(result).toEqual(mockUser);
         expect(fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/auth/user/'),
+          expect.stringContaining('/auth/profile/'),
           expect.objectContaining({
             headers: expect.objectContaining({
               Authorization: 'Bearer token',
@@ -1172,7 +1186,7 @@ describe('APIClient', () => {
           expect.stringContaining('/subscriptions/'),
           expect.objectContaining({
             method: 'POST',
-            body: JSON.stringify({ haunt: 'haunt2' }),
+            body: JSON.stringify({ haunt_id: 'haunt2' }),
           })
         );
       });
@@ -1423,6 +1437,254 @@ describe('APIClient', () => {
         expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
         expect(window.location.href).toBe('/login');
       });
+
+      it('should extract error message from detail field for logging', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Token has expired' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Token has expired',
+            tokenWasPresent: true,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should extract error message from nested error.message field', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ error: { message: 'Authentication failed' } }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Authentication failed',
+            tokenWasPresent: true,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should extract error message from message field', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        localStorageMock.setItem('accessToken', 'test-token');
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ message: 'Unauthorized access' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Unauthorized access',
+            tokenWasPresent: true,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should use default message when no error detail is available', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        localStorageMock.setItem('accessToken', 'test-token');
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({}),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'No error detail',
+            tokenWasPresent: true,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should log token presence correctly when token exists', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        localStorageMock.setItem('accessToken', 'valid-token');
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Invalid token' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            tokenWasPresent: true,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should log token presence correctly when token is missing', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        localStorageMock.clear();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'No token provided' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            tokenWasPresent: false,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should include endpoint in error log', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Unauthorized' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            endpoint: '/haunts/',
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should include retry count in error log', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ detail: 'Unauthorized' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            retryCount: 0,
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should handle malformed JSON in 401 response', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        localStorageMock.setItem('accessToken', 'test-token');
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => {
+            throw new Error('Invalid JSON');
+          },
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Request failed',
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should prioritize detail over error.message', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ 
+            detail: 'Primary error message',
+            error: { message: 'Secondary error message' }
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Primary error message',
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should prioritize error.message over message', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+        
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => ({ 
+            error: { message: 'Nested error message' },
+            message: 'Top-level message'
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          '[API Client] 401 Unauthorized:',
+          expect.objectContaining({
+            error: 'Nested error message',
+          })
+        );
+
+        consoleErrorSpy.mockRestore();
+      });
     });
 
     describe('Network Errors', () => {
@@ -1465,6 +1727,150 @@ describe('APIClient', () => {
 
         await expect(apiClient.getHaunts()).rejects.toThrow('Request failed');
       });
+
+      it('should extract error message from detail field for non-401 errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: 'Bad request error' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Bad request error');
+      });
+
+      it('should extract error message from error.message field for non-401 errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: { message: 'Validation failed' } }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Validation failed');
+      });
+
+      it('should extract error message from message field for non-401 errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ message: 'Request error' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Request error');
+      });
+
+      it('should use HTTP status code when no error message available', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          json: async () => ({}),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('HTTP 403');
+      });
+
+      it('should handle validation errors with field details', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ 
+            error: { 
+              details: {
+                email: ['This field is required'],
+                password: ['Password is too short']
+              }
+            }
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('email: This field is required; password: Password is too short');
+      });
+
+      it('should handle validation errors with single field error', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ 
+            error: { 
+              details: {
+                username: ['Username already exists']
+              }
+            }
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('username: Username already exists');
+      });
+
+      it('should handle validation errors with non-array messages', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ 
+            error: { 
+              details: {
+                name: 'Name is required'
+              }
+            }
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('name: Name is required');
+      });
+
+      it('should fallback to detail when validation details are empty', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ 
+            detail: 'Validation failed',
+            error: { 
+              details: {}
+            }
+          }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Validation failed');
+      });
+
+      it('should handle 404 errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          json: async () => ({ detail: 'Not found' }),
+        });
+
+        await expect(apiClient.getHaunt('999')).rejects.toThrow('Not found');
+      });
+
+      it('should handle 403 forbidden errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          json: async () => ({ detail: 'Permission denied' }),
+        });
+
+        await expect(apiClient.deleteHaunt('1')).rejects.toThrow('Permission denied');
+      });
+
+      it('should handle 429 rate limit errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 429,
+          json: async () => ({ detail: 'Too many requests' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Too many requests');
+      });
+
+      it('should handle 503 service unavailable errors', async () => {
+        (fetch as jest.Mock).mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          json: async () => ({ detail: 'Service temporarily unavailable' }),
+        });
+
+        await expect(apiClient.getHaunts()).rejects.toThrow('Service temporarily unavailable');
+      });
     });
   });
 
@@ -1485,11 +1891,12 @@ describe('APIClient', () => {
 
     describe('Token Synchronization', () => {
       it('should sync token from localStorage on each request', async () => {
+        localStorageMock.clear();
         localStorageMock.setItem('accessToken', 'stored-token');
 
         (fetch as jest.Mock).mockResolvedValueOnce({
           ok: true,
-          json: async () => [],
+          json: async () => ({ results: [] }),
         });
 
         await apiClient.getHaunts();

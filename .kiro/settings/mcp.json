@@ -1,0 +1,50 @@
+{
+  "mcpServers": {
+    "watcher-api": {
+      "command": "python3",
+      "args": [".kiro/mcp-servers/watcher-api-server.py"],
+      "env": {
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_NAME": "watcher",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres"
+      },
+      "disabled": false,
+      "autoApprove": ["get_database_stats", "get_haunts", "get_users"]
+    },
+    "kiroween-scoring": {
+      "command": "python3",
+      "args": [".kiro/mcp-servers/kiroween-scoring.py"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": ["calculate_score", "get_halloween_message", "calculate_haunting_power"]
+    },
+    "gemini-test": {
+      "command": "python3",
+      "args": [".kiro/mcp-servers/gemini-test-server.py"],
+      "env": {
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+        "LLM_API_KEY": "${LLM_API_KEY}"
+      },
+      "disabled": false,
+      "autoApprove": ["test_api_key", "list_models"]
+    },
+    "github": {
+      "command": "uvx",
+      "args": ["mcp-server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "disabled": false,
+      "autoApprove": ["search_repositories", "get_file_contents"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": ["fetch"]
+    }
+  }
+}

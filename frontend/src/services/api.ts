@@ -77,10 +77,13 @@ class APIClient {
       const error = await response.json().catch(() => ({ detail: 'Request failed' }));
       
       if (response.status === 401) {
+        // Extract error message for logging
+        const errorMsg = error.detail || error.error?.message || error.message || 'No error detail';
+        
         console.error('[API Client] 401 Unauthorized:', {
           endpoint,
           tokenWasPresent: !!token,
-          error: error.detail || 'No error detail',
+          error: errorMsg,
           retryCount
         });
         
@@ -160,7 +163,27 @@ class APIClient {
         window.location.href = '/login';
       }
       
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      // Extract error message from various response formats
+      const errorMessage = error.detail || error.error?.message || error.message || `HTTP ${response.status}`;
+      
+      // For validation errors, extract field-specific messages
+      if (error.error?.details) {
+        const details = error.error.details;
+        if (typeof details === 'object') {
+          // Flatten validation errors into a readable message
+          const fieldErrors = Object.entries(details)
+            .map(([field, messages]) => {
+              if (Array.isArray(messages)) {
+                return `${field}: ${messages.join(', ')}`;
+              }
+              return `${field}: ${messages}`;
+            })
+            .join('; ');
+          throw new Error(fieldErrors || errorMessage);
+        }
+      }
+      
+      throw new Error(errorMessage);
     }
 
     return response.json();

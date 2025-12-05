@@ -1,80 +1,115 @@
 # Watcher - Site Change Monitoring
 
-A containerized web application that monitors websites for user-defined changes using AI-powered configuration and provides RSS feeds with a Google Reader-style interface.
+> **Haunt the web. Stay informed.**
 
-## Quick Start
+A site change monitoring application that "haunts" websites to detect user-defined changes and provides RSS feeds with a Google Reader-style interface.
 
-1. Clone the repository
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-3. Configure your Google Gemini API key in `.env`:
-   ```bash
-   LLM_API_KEY=your-gemini-api-key-here
-   ```
-   Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+<details>
+<summary><strong>📑 Table of Contents</strong> (click to expand)</summary>
 
-4. Start all services:
-   ```bash
-   docker-compose up -d
-   ```
-   
-   The entrypoint script will automatically:
-   - Run database migrations
-   - Populate public haunts (available to all users)
-   - Set up the system user
+- [What is Watcher?](#what-is-watcher)
+  - [What Does "Haunting" Mean?](#what-does-haunting-mean)
+- [Key Features](#key-features)
+  - [🤖 AI-Powered Setup](#-ai-powered-setup)
+  - [👻 Intelligent Monitoring](#-intelligent-monitoring)
+  - [📰 Google Reader-Inspired Interface](#-google-reader-inspired-interface)
+  - [🌐 Public Sharing & Subscriptions](#-public-sharing--subscriptions)
+- [How Watcher Relates to Google Reader](#how-watcher-relates-to-google-reader)
+- [How AI Powers Watcher](#how-ai-powers-watcher)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Step-by-Step Setup](#step-by-step-setup)
+  - [Quick Start (TL;DR)](#quick-start-tldr)
+- [Configuration](#configuration)
+  - [Required Environment Variables](#required-environment-variables)
+  - [Google Gemini API Setup](#google-gemini-api-setup)
+- [Mock Data & Demo Setup](#mock-data--demo-setup)
+  - [Public Haunts](#public-haunts-available-to-all-users)
+  - [Demo Data for Testing](#demo-data-for-testing)
+  - [Quick Verification](#quick-verification)
+- [Useful Scripts](#useful-scripts)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [API Endpoints](#api-endpoints)
+  - [Authentication](#authentication)
+  - [Haunt Management](#haunt-management)
+  - [Subscription Management](#subscription-management)
+  - [Folder Management](#folder-management)
+- [Architecture](#architecture)
 
-5. Verify setup:
-   ```bash
-   bash backend/scripts/verify_setup.sh
-   ```
+</details>
 
-6. Create your user account:
-   ```bash
-   docker-compose exec web python manage.py createsuperuser
-   ```
+## What is Watcher?
 
-7. (Optional) Populate demo data for testing:
-   ```bash
-   docker-compose exec web python manage.py populate_demo_data
-   ```
-   Default credentials: `demo@watcher.local` / `demo123`
+Watcher monitors websites for changes you care about—like a friendly ghost watching over pages 24/7. When something meaningful changes, you get notified via email or can check updates in the familiar Google Reader-inspired interface.
 
-## Services
+### What Does "Haunting" Mean?
 
-- **Frontend**: React application (http://localhost:3000)
-- **Backend**: Django REST API (http://localhost:8000)
-- **Database**: PostgreSQL (localhost:5432)
-- **Redis**: Message broker and cache (localhost:6379)
-- **Celery**: Background task processing
-- **Scheduler**: Celery beat for periodic tasks
+When you **haunt a website**, Watcher becomes your invisible observer—silently watching a page for the changes you care about. Like a friendly ghost, it monitors 24/7 without being seen, then alerts you the moment something important happens.
+
+**Examples:**
+- 💼 Haunt a job board to catch new postings the second they appear
+- 🎓 Haunt a course page to grab a spot when enrollment opens
+- 🛍️ Haunt a product page to buy when it's back in stock
+- 🚀 Haunt a deployment dashboard to track service health
 
 ## Key Features
 
-### AI-Powered Monitoring
-- **Natural Language Setup**: Describe what you want to monitor in plain English
-- **Automatic Selector Generation**: AI converts descriptions to CSS selectors and XPath expressions
-- **Intelligent Alert Decisions**: AI evaluates if changes match your intent, not just any change
-- **Context-Aware Summaries**: AI generates human-readable summaries of what changed
-- **Configuration Preview**: Generate and preview configurations before creating haunts
-- **Test Scraping**: Test your configuration against live sites before saving
-- **No Rule Configuration**: No need to define truthy values or complex rules
+### 🤖 AI-Powered Setup
+- **Natural Language Configuration**: Just say "monitor the price" or "watch for new posts"—AI figures out the technical details
+- **Smart Change Detection**: AI understands context and only alerts you to meaningful changes, not every pixel update
+- **Contextual Summaries**: Each alert includes an AI-generated summary explaining what changed and why it matters
+- **No Coding Required**: Describe what you want in plain English; AI generates CSS selectors and scraping rules
 
-### Monitoring Capabilities
-- **SPA Compatible**: Uses Playwright headless browser for modern JavaScript applications
-- **Flexible Scheduling**: Monitor sites every 15 minutes, 30 minutes, hourly, or daily
-- **Intent-Based Alerts**: AI decides if changes match what you want to know
-- **RSS Integration**: Generates RSS feeds for easy integration with feed readers
-- **Folder Organization**: Group related haunts into hierarchical folders
-- **Public Sharing**: Share your monitoring configurations with the community
+### 👻 Intelligent Monitoring
+- **Modern Web Compatible**: Uses Playwright headless browser to handle JavaScript-heavy single-page applications
+- **Flexible Scheduling**: Check sites every 15 minutes, 30 minutes, hourly, or daily
+- **Intent-Based Alerts**: AI evaluates if changes match your monitoring intent
+- **Email Notifications**: Get alerts in your inbox when changes are detected
+- **Manual Refresh**: Trigger immediate checks when you need them
 
-### Public Haunts & Subscriptions
-- **Public Haunt Directory**: Browse haunts shared by other users
-- **One-Click Subscribe**: Subscribe to public haunts without creating your own configuration
-- **Shared Monitoring**: Benefit from monitoring configurations created by others
-- **Owner Attribution**: See who created each public haunt via the `owner_email` field
-- **Independent Read States**: Track your own read/unread status for subscribed haunts
+### 📰 Google Reader-Inspired Interface
+- **Three-Panel Layout**: Familiar navigation → feed list → content hierarchy
+- **Keyboard Shortcuts**: Navigate with J/K, mark read with M, star with S
+- **RSS Integration**: Generate RSS feeds for use with any feed reader
+- **Folder Organization**: Group related monitors into hierarchical folders
+- **Clean, Information-Dense Design**: Minimal UI that gets out of your way
+
+### 🌐 Public Sharing & Subscriptions
+- **Share Configurations**: Make your haunts public for others to use
+- **One-Click Subscribe**: Subscribe to public haunts without creating your own
+- **Community Benefit**: Browse and use monitoring configurations created by others
+- **Independent Tracking**: Track your own read/unread status for subscribed haunts
+
+## How Watcher Relates to Google Reader
+
+### What's the Same ✓
+- **Three-panel layout** for efficient information consumption
+- **Keyboard shortcuts** (J/K/M/S) for power users
+- **Clean, information-dense design** with subtle colors and thin borders
+- **RSS feed generation** for integration with other readers
+- **Folder organization** for grouping related items
+- **Unread/read tracking** with visual indicators
+
+### What's Different ⚡
+- **Automatic website monitoring** instead of just RSS feed aggregation
+- **AI-powered setup** converts natural language to technical selectors
+- **Smart change detection** filters out noise, only alerts on meaningful changes
+- **Email notifications** for immediate awareness
+- **Modern SPA support** using real browser automation (Playwright)
+- **Public haunt sharing** for community-created monitoring configurations
+
+**In essence:** Same beloved interface. New superpower: haunting any website.
+
+## How AI Powers Watcher
+
+Watcher uses **Google Gemini 2.0 Flash** for three key capabilities:
+
+### 1. Natural Language to Code
+Say "watch the price in the product details" and AI generates:
+- CSS selectors to find the right elements
+- XPath expressions for complex structures
+- Normalizatint Read States**: Track your own read/unread status for subscribed haunts
 - **Subscription Management**: Subscribe and unsubscribe from public haunts at any time
 - **Pre-configured Haunts**: 6 public haunts available immediately on first startup
 

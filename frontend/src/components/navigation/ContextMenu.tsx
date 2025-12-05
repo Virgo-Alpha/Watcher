@@ -41,6 +41,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, type, onAction, onClose
   ];
 
   const hauntActions = [
+    { id: 'edit', label: 'Edit Haunt', icon: '✏️' },
+    { id: 'refresh', label: 'Refresh Now', icon: '🔄' },
     { id: 'delete', label: 'Delete Haunt', icon: '🗑️', danger: true },
   ];
 
