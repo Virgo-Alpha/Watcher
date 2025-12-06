@@ -1,0 +1,10 @@
+{
+  "WatcherStack": {
+    "RedisEndpoint": "wat-wa-83x3sickos6l.gfzwze.0001.use1.cache.amazonaws.com",
+    "CloudFrontURL": "https://dclgubjbfzflp.cloudfront.net",
+    "LoadBalancerDNS": "Watche-Watch-oLgAEGqjYWoW-365936052.us-east-1.elb.amazonaws.com",
+    "BackendRepoUri": "021891601803.dkr.ecr.us-east-1.amazonaws.com/watcher-backend",
+    "FrontendRepoUri": "021891601803.dkr.ecr.us-east-1.amazonaws.com/watcher-frontend",
+    "DatabaseEndpoint": "watcherstack-watcherdb7974fe80-tz3lhrihsyoi.c7igymoaqo9h.us-east-1.rds.amazonaws.com"
+  }
+}

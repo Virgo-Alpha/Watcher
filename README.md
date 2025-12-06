@@ -141,7 +141,73 @@ bash fast-deploy.sh
 
 ## Local Development Setup
 
-For local development with Docker Compose, continue below. For AWS deployment, see above.
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Google Gemini API key from [AI Studio](https://aistudio.google.com/app/apikey)
+
+### Quick Start
+
+```bash
+# 1. Clone and setup environment
+cp .env.example .env
+# Edit .env and add your LLM_API_KEY
+
+# 2. Start local development (hot reload enabled)
+docker-compose up -d
+
+# 3. Run migrations and setup demo data
+docker-compose exec web python manage.py populate_demo_data
+
+# 4. Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000/api/v1
+# Django Admin: http://localhost:8000/admin
+```
+
+**Demo credentials:** `demo@watcher.local` / `demo123`
+
+### Local vs Production Configurations
+
+Watcher has **two separate Docker configurations** to ensure your local development doesn't break when deploying to production:
+
+#### Local Development (`docker-compose.yml`)
+- **Frontend**: Uses `Dockerfile.dev` with React dev server
+- **Hot reload**: Code changes reflect immediately via volume mounts
+- **Debug mode**: Enabled for easier development
+- **Ports**: Frontend 3000, Backend 8000, DB 5432, Redis 6379
+- **Use for**: Day-to-day development work
+
+#### Production (`docker-compose.prod.yml` and AWS)
+- **Frontend**: Uses production `Dockerfile` with nginx serving optimized static build
+- **Optimized**: Minified assets, production Django settings
+- **Debug mode**: Disabled
+- **Ports (local test)**: Frontend 80, Backend 8000, DB 5433, Redis 6380
+- **Use for**: Testing production build locally before AWS deployment
+
+### Testing Production Build Locally
+
+Before deploying to AWS, test the production build on your machine:
+
+```bash
+# Start production-like environment
+docker-compose -f docker-compose.prod.yml up -d
+
+# Run migrations and setup
+docker-compose -f docker-compose.prod.yml exec web python manage.py populate_demo_data
+
+# Access at http://localhost (port 80)
+# Backend API: http://localhost:8000/api/v1
+
+# Stop when done
+docker-compose -f docker-compose.prod.yml down
+```
+
+### Why Two Configurations?
+
+- **Development needs hot reload** for fast iteration - the React dev server watches files and reloads instantly
+- **Production needs optimization** - static builds are minified, cached, and served by nginx
+- **Separate configs prevent deployment issues** - what works locally will work in production
 
 ## Configuration
 
@@ -149,11 +215,16 @@ For local development with Docker Compose, continue below. For AWS deployment, s
 
 The application requires several environment variables to be configured in your `.env` file:
 
-- `LLM_API_KEY` - **Required**: Your OpenAI API key for AI-powered haunt configuration
+- `LLM_API_KEY` - **Required**: Your Google Gemini API key for AI-powered haunt configuration
 - `DATABASE_URL` - PostgreSQL connection string (default: `postgresql://postgres:postgres@db:5432/watcher`)
 - `REDIS_URL` - Redis connection for Celery (default: `redis://redis:6379/0`)
 - `SECRET_KEY` - Django secret key for security
 - `DEBUG` - Set to `True` for development, `False` for production
+- `CORS_ALLOWED_ORIGINS` - Comma-separated list of allowed frontend URLs for production (optional; if not set, all origins are allowed for easier initial deployment)
+- `REACT_APP_API_URL` - Frontend API URL configuration:
+  - **Development**: `http://localhost:8000/api/v1` (absolute URL to local backend)
+  - **Production**: Leave undefined or empty string to use relative URLs (`/api/v1`)
+  - The frontend automatically detects the environment and configures the API client accordingly
 
 ### Google Gemini API Setup
 
@@ -380,6 +451,29 @@ docker-compose logs -f celery
 # Monitor scheduled tasks
 docker-compose logs -f scheduler
 ```
+
+### CORS Configuration
+
+For production deployments, you can configure allowed origins for Cross-Origin Resource Sharing (CORS):
+
+**Development (default):**
+```bash
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+```
+
+**Production (recommended):**
+```bash
+# Specify your frontend domain(s)
+CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+```
+
+**Production (permissive - for initial deployment):**
+```bash
+# Leave empty to allow all origins (not recommended for long-term production use)
+CORS_ALLOWED_ORIGINS=
+```
+
+**Security Note:** If `CORS_ALLOWED_ORIGINS` is not specified in production, the application will allow requests from all origins. This is useful for initial deployment and testing, but for production use, you should specify your actual frontend URLs for better security.
 
 ## Troubleshooting
 

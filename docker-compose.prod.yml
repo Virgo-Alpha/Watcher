@@ -1,5 +1,8 @@
 version: '3.8'
 
+# Production-like local testing configuration
+# Uses production Dockerfiles with nginx for frontend
+
 services:
   web:
     build: 
@@ -7,32 +10,28 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
     environment:
-      - DEBUG=${DEBUG:-True}
+      - DEBUG=False
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/watcher
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - SECRET_KEY=${SECRET_KEY:-prod-secret-key-change-this}
       - LLM_API_KEY=${LLM_API_KEY:-}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      - ALLOWED_HOSTS=localhost,127.0.0.1,web,frontend
+      - CORS_ALLOWED_ORIGINS=http://localhost:80,http://localhost
+      - DJANGO_SETTINGS_MODULE=watcher.settings.production
     depends_on:
       - db
       - redis
-    command: python manage.py runserver 0.0.0.0:8000
+    command: gunicorn watcher.wsgi:application --bind 0.0.0.0:8000 --workers 2
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://localhost:8000/api/v1
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000/api/v1
-      - CHOKIDAR_USEPOLLING=true
+      - "80:3000"
     depends_on:
       - web
 
@@ -43,29 +42,28 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_prod:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
-      - redis_data:/data
+      - redis_data_prod:/data
 
   celery:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     environment:
-      - DEBUG=${DEBUG:-True}
+      - DEBUG=False
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/watcher
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - SECRET_KEY=${SECRET_KEY:-prod-secret-key-change-this}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - DJANGO_SETTINGS_MODULE=watcher.settings.production
     depends_on:
       - db
       - redis
@@ -75,19 +73,18 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     environment:
-      - DEBUG=${DEBUG:-True}
+      - DEBUG=False
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/watcher
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - SECRET_KEY=${SECRET_KEY:-prod-secret-key-change-this}
       - LLM_API_KEY=${LLM_API_KEY:-}
+      - DJANGO_SETTINGS_MODULE=watcher.settings.production
     depends_on:
       - db
       - redis
     command: celery -A watcher beat --loglevel=info
 
 volumes:
-  postgres_data:
-  redis_data:
+  postgres_data_prod:
+  redis_data_prod:

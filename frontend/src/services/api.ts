@@ -13,7 +13,10 @@ import {
   UserUIPreferences,
 } from '../types';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+// Use relative URL in production (empty env var), absolute URL in development
+const API_BASE_URL = process.env.REACT_APP_API_URL 
+  ? process.env.REACT_APP_API_URL  // Use provided URL (dev or custom)
+  : '/api/v1';  // Production default: relative URL (same origin)
 
 class APIClient {
   private baseURL: string;

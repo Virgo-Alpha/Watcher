@@ -1,34 +1,45 @@
 #!/bin/bash
 set -e
 
-echo "🗑️  Destroying Watcher AWS infrastructure..."
-echo "⚠️  This will delete all resources including databases!"
-read -p "Are you sure? (yes/no): " confirm
+echo "🗑️  Destroying Watcher deployment"
+echo "================================="
+echo ""
+echo "⚠️  This will delete all resources including:"
+echo "   - ECS services and tasks"
+echo "   - RDS database (all data will be lost)"
+echo "   - Redis cache"
+echo "   - Load balancer"
+echo "   - CloudFront distribution"
+echo "   - ECR repositories and images"
+echo ""
+read -p "Are you sure? Type 'yes' to confirm: " CONFIRM
 
-if [ "$confirm" != "yes" ]; then
-    echo "Cancelled."
+if [ "$CONFIRM" != "yes" ]; then
+    echo "Cancelled"
     exit 0
 fi
 
+export AWS_REGION=${AWS_REGION:-us-east-1}
+
+echo ""
+echo "🔄 Scaling down services to 0..."
+CLUSTER=$(aws ecs list-clusters --region $AWS_REGION --query 'clusterArns[?contains(@, `WatcherStack`)]' --output text 2>/dev/null | cut -d'/' -f2)
+
+if [ ! -z "$CLUSTER" ]; then
+    aws ecs update-service --cluster $CLUSTER --service WatcherStack-BackendService --desired-count 0 --region $AWS_REGION --no-cli-pager 2>/dev/null || true
+    aws ecs update-service --cluster $CLUSTER --service WatcherStack-FrontendService --desired-count 0 --region $AWS_REGION --no-cli-pager 2>/dev/null || true
+    aws ecs update-service --cluster $CLUSTER --service WatcherStack-CeleryService --desired-count 0 --region $AWS_REGION --no-cli-pager 2>/dev/null || true
+    aws ecs update-service --cluster $CLUSTER --service WatcherStack-BeatService --desired-count 0 --region $AWS_REGION --no-cli-pager 2>/dev/null || true
+    
+    echo "⏳ Waiting for tasks to stop..."
+    sleep 30
+fi
+
+echo ""
+echo "🗑️  Destroying CDK stack..."
 cd cdk
-
-# Empty ECR repositories first
-echo "Emptying ECR repositories..."
-AWS_REGION=${AWS_REGION:-us-east-1}
-AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-
-aws ecr batch-delete-image \
-    --repository-name watcher-backend \
-    --image-ids "$(aws ecr list-images --repository-name watcher-backend --query 'imageIds[*]' --output json)" \
-    --region $AWS_REGION || true
-
-aws ecr batch-delete-image \
-    --repository-name watcher-frontend \
-    --image-ids "$(aws ecr list-images --repository-name watcher-frontend --query 'imageIds[*]' --output json)" \
-    --region $AWS_REGION || true
-
-# Destroy stack
-echo "Destroying CDK stack..."
 npx cdk destroy --force
 
-echo "✅ Infrastructure destroyed!"
+echo ""
+echo "✅ Destruction complete!"
+echo ""

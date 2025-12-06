@@ -64,7 +64,10 @@ The frontend is accessible at http://localhost:3000 and proxies API requests to 
 
 ## Environment Variables
 
-- `REACT_APP_API_URL`: Backend API URL (default: http://localhost:8000/api/v1)
+- `REACT_APP_API_URL`: Backend API URL configuration
+  - **Development**: Set to `http://localhost:8000/api/v1` for local backend
+  - **Production**: Leave undefined or set to empty string to use relative URLs (`/api/v1`)
+  - The frontend automatically detects the environment and uses the appropriate URL
 - `CHOKIDAR_USEPOLLING`: Enable file watching in Docker (set to true)
 
 ## State Management

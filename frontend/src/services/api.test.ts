@@ -40,6 +40,376 @@ Object.defineProperty(window, 'localStorage', {
 delete (window as any).location;
 window.location = { href: '' } as any;
 
+describe('API Base URL Configuration', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('should use relative URL when REACT_APP_API_URL is undefined (production default)', () => {
+    delete process.env.REACT_APP_API_URL;
+    
+    // Re-import to get fresh instance with new env
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+  });
+
+  it('should use relative URL when REACT_APP_API_URL is empty string', () => {
+    process.env.REACT_APP_API_URL = '';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+  });
+
+  it('should use custom URL when REACT_APP_API_URL is set to a specific value', () => {
+    process.env.REACT_APP_API_URL = 'https://api.example.com/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://api.example.com/v1');
+    });
+  });
+
+  it('should use relative URL when REACT_APP_API_URL is explicitly set to /api/v1', () => {
+    process.env.REACT_APP_API_URL = '/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+  });
+
+  it('should handle staging environment URL', () => {
+    process.env.REACT_APP_API_URL = 'https://staging-api.example.com/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://staging-api.example.com/api/v1');
+    });
+  });
+
+  it('should handle production environment with custom domain', () => {
+    process.env.REACT_APP_API_URL = 'https://watcher-api.production.com/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://watcher-api.production.com/api/v1');
+    });
+  });
+
+  it('should correctly construct full URLs with relative base when env var is undefined', () => {
+    delete process.env.REACT_APP_API_URL;
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      
+      // Mock fetch to capture the URL
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+      global.fetch = mockFetch;
+      
+      // Make a request
+      client.getHaunts();
+      
+      // Verify the full URL was constructed correctly
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/haunts/',
+        expect.any(Object)
+      );
+    });
+  });
+
+  it('should correctly construct full URLs with relative base', () => {
+    process.env.REACT_APP_API_URL = '';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      
+      // Mock fetch to capture the URL
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+      global.fetch = mockFetch;
+      
+      // Make a request
+      client.getHaunts();
+      
+      // Verify the full URL was constructed correctly
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/haunts/',
+        expect.any(Object)
+      );
+    });
+  });
+
+  it('should correctly construct full URLs with custom base', () => {
+    process.env.REACT_APP_API_URL = 'https://api.custom.com/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      
+      // Mock fetch to capture the URL
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+      global.fetch = mockFetch;
+      
+      // Make a request
+      client.getHaunts();
+      
+      // Verify the full URL was constructed correctly
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.custom.com/v1/haunts/',
+        expect.any(Object)
+      );
+    });
+  });
+
+  it('should handle undefined vs empty string consistently (both use relative URL)', () => {
+    // Test undefined - should use relative URL
+    delete process.env.REACT_APP_API_URL;
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+
+    // Test empty string - should also use relative URL
+    process.env.REACT_APP_API_URL = '';
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+
+    // Both should result in the same relative URL
+    expect('/api/v1').toBe('/api/v1');
+  });
+
+  it('should use relative URL when REACT_APP_API_URL is set but falsy (empty)', () => {
+    process.env.REACT_APP_API_URL = '';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      // Empty string is falsy, so fallback to '/api/v1'
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+  });
+
+  it('should handle localhost with different ports', () => {
+    process.env.REACT_APP_API_URL = 'http://localhost:3001/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('http://localhost:3001/api/v1');
+    });
+  });
+
+  it('should handle URLs without trailing slash', () => {
+    process.env.REACT_APP_API_URL = 'https://api.example.com/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://api.example.com/api/v1');
+    });
+  });
+
+  it('should handle URLs with trailing slash', () => {
+    process.env.REACT_APP_API_URL = 'https://api.example.com/api/v1/';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://api.example.com/api/v1/');
+    });
+  });
+
+  it('should work with Docker Compose service names', () => {
+    process.env.REACT_APP_API_URL = 'http://web:8000/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('http://web:8000/api/v1');
+    });
+  });
+
+  it('should handle IPv4 addresses', () => {
+    process.env.REACT_APP_API_URL = 'http://192.168.1.100:8000/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('http://192.168.1.100:8000/api/v1');
+    });
+  });
+
+  it('should handle IPv6 addresses', () => {
+    process.env.REACT_APP_API_URL = 'http://[::1]:8000/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('http://[::1]:8000/api/v1');
+    });
+  });
+
+  it('should use localhost URL when explicitly set for development', () => {
+    process.env.REACT_APP_API_URL = 'http://localhost:8000/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('http://localhost:8000/api/v1');
+    });
+  });
+
+  it('should handle null value (treated as falsy)', () => {
+    process.env.REACT_APP_API_URL = null as any;
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/api/v1');
+    });
+  });
+
+  it('should handle whitespace-only string', () => {
+    process.env.REACT_APP_API_URL = '   ';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      // Whitespace string is truthy, so it will be used as-is
+      expect((client as any).baseURL).toBe('   ');
+    });
+  });
+
+  it('should handle URL with query parameters', () => {
+    process.env.REACT_APP_API_URL = 'https://api.example.com/api/v1?key=value';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://api.example.com/api/v1?key=value');
+    });
+  });
+
+  it('should handle URL with hash fragment', () => {
+    process.env.REACT_APP_API_URL = 'https://api.example.com/api/v1#section';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('https://api.example.com/api/v1#section');
+    });
+  });
+
+  it('should handle relative path with subdirectory', () => {
+    process.env.REACT_APP_API_URL = '/app/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('/app/api/v1');
+    });
+  });
+
+  it('should handle protocol-relative URL', () => {
+    process.env.REACT_APP_API_URL = '//api.example.com/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      expect((client as any).baseURL).toBe('//api.example.com/api/v1');
+    });
+  });
+
+  it('should correctly construct URLs with different base URL formats', () => {
+    const testCases = [
+      { env: undefined, expected: '/api/v1/haunts/' },
+      { env: '', expected: '/api/v1/haunts/' },
+      { env: 'http://localhost:8000/api/v1', expected: 'http://localhost:8000/api/v1/haunts/' },
+      { env: 'https://api.prod.com/api/v1', expected: 'https://api.prod.com/api/v1/haunts/' },
+      { env: '/custom/api/v1', expected: '/custom/api/v1/haunts/' },
+    ];
+
+    testCases.forEach(({ env, expected }) => {
+      if (env === undefined) {
+        delete process.env.REACT_APP_API_URL;
+      } else {
+        process.env.REACT_APP_API_URL = env;
+      }
+
+      jest.isolateModules(() => {
+        const { default: client } = require('./api');
+        
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ results: [] }),
+        });
+        global.fetch = mockFetch;
+        
+        client.getHaunts();
+        
+        expect(mockFetch).toHaveBeenCalledWith(
+          expected,
+          expect.any(Object)
+        );
+      });
+    });
+  });
+
+  it('should use same-origin relative URL for production builds', () => {
+    // Simulate production build where env var is not set
+    delete process.env.REACT_APP_API_URL;
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      const baseURL = (client as any).baseURL;
+      
+      // Should be relative URL (same origin)
+      expect(baseURL).toBe('/api/v1');
+      expect(baseURL.startsWith('/')).toBe(true);
+      expect(baseURL.includes('://')).toBe(false);
+    });
+  });
+
+  it('should allow cross-origin requests when explicitly configured', () => {
+    process.env.REACT_APP_API_URL = 'https://different-domain.com/api/v1';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      const baseURL = (client as any).baseURL;
+      
+      // Should be absolute URL (cross-origin)
+      expect(baseURL).toBe('https://different-domain.com/api/v1');
+      expect(baseURL.includes('://')).toBe(true);
+    });
+  });
+
+  it('should handle zero as env value (falsy but valid)', () => {
+    process.env.REACT_APP_API_URL = '0';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      // String '0' is truthy, so it will be used
+      expect((client as any).baseURL).toBe('0');
+    });
+  });
+
+  it('should handle false string as env value', () => {
+    process.env.REACT_APP_API_URL = 'false';
+    
+    jest.isolateModules(() => {
+      const { default: client } = require('./api');
+      // String 'false' is truthy, so it will be used
+      expect((client as any).baseURL).toBe('false');
+    });
+  });
+});
+
 describe('APIClient', () => {
   beforeEach(() => {
     // Clear the store
